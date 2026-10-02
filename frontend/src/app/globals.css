@@ -1,0 +1,236 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Surface */
+  --color-background: var(--md-sys-color-background);
+  --color-surface: var(--md-sys-color-surface);
+  --color-surface-variant: var(--md-sys-color-surface-variant);
+  --color-surface-container: var(--md-sys-color-surface-container);
+  --color-surface-container-high: var(--md-sys-color-surface-container-high);
+  --color-surface-container-highest: var(--md-sys-color-surface-container-highest);
+  --color-surface-container-low: var(--md-sys-color-surface-container-low);
+  --color-surface-container-lowest: var(--md-sys-color-surface-container-lowest);
+
+  /* Foreground / Text */
+  --color-foreground: var(--md-sys-color-on-background);
+  --color-on-surface: var(--md-sys-color-on-surface);
+  --color-on-surface-variant: var(--md-sys-color-on-surface-variant);
+
+  /* Primary */
+  --color-primary: var(--md-sys-color-primary);
+  --color-primary-foreground: var(--md-sys-color-on-primary);
+  --color-primary-container: var(--md-sys-color-primary-container);
+  --color-on-primary-container: var(--md-sys-color-on-primary-container);
+
+  /* Secondary */
+  --color-secondary: var(--md-sys-color-secondary);
+  --color-secondary-foreground: var(--md-sys-color-on-secondary);
+  --color-secondary-container: var(--md-sys-color-secondary-container);
+  --color-on-secondary-container: var(--md-sys-color-on-secondary-container);
+
+  /* Tertiary */
+  --color-tertiary: var(--md-sys-color-tertiary);
+  --color-tertiary-foreground: var(--md-sys-color-on-tertiary);
+  --color-tertiary-container: var(--md-sys-color-tertiary-container);
+  --color-on-tertiary-container: var(--md-sys-color-on-tertiary-container);
+
+  /* Error */
+  --color-error: var(--md-sys-color-error);
+  --color-error-foreground: var(--md-sys-color-on-error);
+  --color-error-container: var(--md-sys-color-error-container);
+  --color-on-error-container: var(--md-sys-color-on-error-container);
+  
+  --color-destructive: var(--md-sys-color-error);
+  --color-destructive-foreground: var(--md-sys-color-on-error);
+
+  /* Borders */
+  --color-border: var(--md-sys-color-outline);
+  --color-border-variant: var(--md-sys-color-outline-variant);
+
+  /* Legacy overrides to match old component structures */
+  --color-card: var(--md-sys-color-surface-container);
+  --color-card-foreground: var(--md-sys-color-on-surface);
+  --color-accent: var(--md-sys-color-primary-container);
+  --color-accent-foreground: var(--md-sys-color-on-primary-container);
+
+  /* Fonts */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans), sans-serif;
+}
+
+/* Base styles for scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-standard);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-variant);
+}
+
+/* ===================================================
+   PROSE / MARKDOWN RENDERING (react-markdown output)
+   =================================================== */
+
+.prose {
+  color: var(--md-sys-color-on-surface);
+  line-height: 1.7;
+  font-size: 0.9rem;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  color: var(--md-sys-color-on-surface);
+  font-weight: 600;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+  line-height: 1.3;
+}
+
+.prose h1 { font-size: 1.4em; }
+.prose h2 { font-size: 1.2em; }
+.prose h3 { font-size: 1.05em; border-bottom: 1px solid var(--md-sys-color-outline-variant); padding-bottom: 0.2em; }
+
+.prose p {
+  margin-top: 0.6em;
+  margin-bottom: 0.6em;
+}
+
+.prose p:first-child { margin-top: 0; }
+.prose p:last-child { margin-bottom: 0; }
+
+.prose strong {
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface);
+}
+
+.prose em {
+  font-style: italic;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.4em;
+  margin: 0.5em 0;
+}
+
+.prose ul { list-style-type: disc; }
+.prose ol { list-style-type: decimal; }
+
+.prose li {
+  margin: 0.25em 0;
+  padding-left: 0.2em;
+}
+
+.prose li::marker {
+  color: var(--md-sys-color-primary);
+}
+
+.prose blockquote {
+  border-left: 3px solid var(--md-sys-color-primary);
+  background: var(--md-sys-color-surface-container-high);
+  padding: 0.5em 1em;
+  margin: 0.75em 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--md-sys-color-on-surface-variant);
+  font-style: italic;
+}
+
+.prose code {
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-primary);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.85em;
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.prose pre {
+  background: var(--md-sys-color-surface-container-highest);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 8px;
+  padding: 1em;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+
+.prose pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--md-sys-color-on-surface);
+  font-size: 0.85em;
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  font-size: 0.875em;
+}
+
+.prose th {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  font-weight: 600;
+  padding: 0.5em 0.75em;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  text-align: left;
+}
+
+.prose td {
+  padding: 0.4em 0.75em;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.prose tr:nth-child(even) td {
+  background: var(--md-sys-color-surface-container-low);
+}
+
+.prose a {
+  color: var(--md-sys-color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose a:hover {
+  color: var(--md-sys-color-primary-container);
+}
+
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  margin: 1.25em 0;
+}
+
+/* Source citations */
+.prose p > strong:only-child {
+  display: block;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.5em;
+}

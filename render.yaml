@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: catalyst-rag-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt && python scripts/download_models.py
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: MODELS_CACHE_PATH
+        value: storage/models
+      - key: OFFLINE_MODE
+        value: "true"
+      - key: ALLOWED_ORIGINS
+        value: "http://localhost:3000"
+      - key: GROQ_API_KEY
+        sync: false

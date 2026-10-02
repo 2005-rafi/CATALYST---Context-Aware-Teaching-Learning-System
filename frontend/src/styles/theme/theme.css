@@ -1,0 +1,189 @@
+/* ============================================
+   DESIGN TOKENS - SINGLE SOURCE OF TRUTH
+   ============================================ */
+
+/* Dark Theme Tokens */
+[data-theme="dark"] {
+  /* Surface Hierarchy */
+  --md-sys-color-background: rgb(19 19 20);
+  --md-sys-color-surface: rgb(20 19 19);
+  --md-sys-color-surface-variant: rgb(68 71 72);
+  --md-sys-color-surface-container: rgb(49 48 48);
+  --md-sys-color-surface-container-high: rgb(60 59 59);
+  --md-sys-color-surface-container-highest: rgb(71 70 70);
+  --md-sys-color-surface-container-low: rgb(32 31 31);
+  --md-sys-color-surface-container-lowest: rgb(0 0 0);
+
+  /* On-Surface Text */
+  --md-sys-color-on-background: rgb(229 226 226);
+  --md-sys-color-on-surface: rgb(255 255 255);
+  --md-sys-color-on-surface-variant: rgb(255 255 255);
+
+  /* Brand & Interactive */
+  --md-sys-color-primary: rgb(235 240 253);
+  --md-sys-color-on-primary: rgb(0 0 0);
+  --md-sys-color-primary-container: rgb(189 195 207);
+  --md-sys-color-on-primary-container: rgb(6 12 20);
+
+  --md-sys-color-secondary: rgb(236 240 250);
+  --md-sys-color-on-secondary: rgb(0 0 0);
+  --md-sys-color-secondary-container: rgb(190 195 205);
+  --md-sys-color-on-secondary-container: rgb(7 12 18);
+
+  --md-sys-color-tertiary: rgb(189 251 255);
+  --md-sys-color-on-tertiary: rgb(0 0 0);
+  --md-sys-color-tertiary-container: rgb(80 212 221);
+  --md-sys-color-on-tertiary-container: rgb(0 14 15);
+
+  --md-sys-color-error: rgb(255 236 233);
+  --md-sys-color-on-error: rgb(0 0 0);
+  --md-sys-color-error-container: rgb(255 174 164);
+  --md-sys-color-on-error-container: rgb(34 0 1);
+
+  /* Borders & Dividers */
+  --md-sys-color-outline: rgb(238 240 241);
+  --md-sys-color-outline-variant: rgb(192 195 196);
+
+  /* Semantic Aliases */
+  --color-text-primary: rgb(255 255 255);
+  --color-text-secondary: rgb(255 255 255);
+  --color-text-tertiary: rgb(192 195 196);
+  --color-bg-card: rgb(32 31 31);
+  --color-bg-input: rgb(49 48 48);
+  --color-bg-hover: rgb(60 59 59);
+  --color-border: rgb(68 71 72);
+  --color-border-subtle: rgb(49 48 48);
+  --color-accent: rgb(193 199 211);
+  --color-accent-hover: rgb(221 227 239);
+
+  /* Elevation System (Dark Mode Surface Tint/Subtle Shadow) */
+  --elevation-0: none;
+  --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --elevation-2: 0 4px 6px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --elevation-3: 0 10px 15px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+  /* AI Content Glow Tokens (Dark Mode Luminescence) */
+  --glow-ai-subtle: 0 0 12px 1px rgba(235, 240, 253, 0.15);
+  --glow-ai-medium: 0 0 16px 2px rgba(235, 240, 253, 0.25);
+  --glow-ai-strong: 0 0 20px 3px rgba(189, 251, 255, 0.45);
+}
+
+
+/* Light Theme Tokens */
+[data-theme="light"] {
+  /* Surface Hierarchy */
+  --md-sys-color-background: rgb(252 248 249);
+  --md-sys-color-surface: rgb(252 248 248);
+  --md-sys-color-surface-variant: rgb(224 227 227);
+  --md-sys-color-surface-container: rgb(235 231 231);
+  --md-sys-color-surface-container-high: rgb(223 220 219);
+  --md-sys-color-surface-container-highest: rgb(212 209 208);
+  --md-sys-color-surface-container-low: rgb(246 243 242);
+  --md-sys-color-surface-container-lowest: rgb(255 255 255);
+
+  /* On-Surface Text */
+  --md-sys-color-on-background: rgb(28 27 28);
+  --md-sys-color-on-surface: rgb(17 17 17);
+  --md-sys-color-on-surface-variant: rgb(51 55 56);
+
+  /* Brand & Interactive */
+  --md-sys-color-primary: rgb(13 19 28);
+  --md-sys-color-on-primary: rgb(255 255 255);
+  --md-sys-color-primary-container: rgb(34 40 49);
+  --md-sys-color-on-primary-container: rgb(174 179 191);
+
+  --md-sys-color-secondary: rgb(35 40 48);
+  --md-sys-color-on-secondary: rgb(255 255 255);
+  --md-sys-color-secondary-container: rgb(57 62 70);
+  --md-sys-color-on-secondary-container: rgb(205 210 220);
+
+  --md-sys-color-tertiary: rgb(0 61 64);
+  --md-sys-color-on-tertiary: rgb(255 255 255);
+  --md-sys-color-tertiary-container: rgb(0 121 127);
+  --md-sys-color-on-tertiary-container: rgb(255 255 255);
+
+  --md-sys-color-error: rgb(116 0 6);
+  --md-sys-color-on-error: rgb(255 255 255);
+  --md-sys-color-error-container: rgb(207 44 39);
+  --md-sys-color-on-error-container: rgb(255 255 255);
+
+  /* Borders & Dividers */
+  --md-sys-color-outline: rgb(79 83 84);
+  --md-sys-color-outline-variant: rgb(106 110 110);
+
+  /* Semantic Aliases */
+  --color-text-primary: rgb(17 17 17);
+  --color-text-secondary: rgb(51 55 56);
+  --color-text-tertiary: rgb(106 110 110);
+  --color-bg-card: rgb(255 255 255);
+  --color-bg-input: rgb(246 243 242);
+  --color-bg-hover: rgb(235 231 231);
+  --color-border: rgb(224 227 227);
+  --color-border-subtle: rgb(235 231 231);
+  --color-accent: rgb(13 19 28);
+  --color-accent-hover: rgb(34 40 49);
+
+  /* Elevation System (Light Mode Shadow) */
+  --elevation-0: none;
+  --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --elevation-2: 0 4px 6px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --elevation-3: 0 10px 15px rgba(0, 0, 0, 0.12), 0 4px 6px rgba(0, 0, 0, 0.08);
+
+  /* AI Content Glow Tokens (Light Mode Highlight) */
+  --glow-ai-subtle: 0 0 4px 1px rgba(13, 19, 28, 0.03);
+  --glow-ai-medium: 0 0 6px 2px rgba(13, 19, 28, 0.05);
+  --glow-ai-strong: 0 0 8px 2px rgba(0, 61, 64, 0.08);
+}
+
+
+/* Spacing & Layout Scales */
+:root {
+  /* Spacing Scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 80px;
+
+  /* Typography Scale */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* Border Radius Scale */
+  --radius-sharp: 2px;
+  --radius-standard: 8px;
+  --radius-large: 16px;
+  --radius-pill: 9999px;
+
+  /* Motion & Animation Tokens */
+  --motion-duration-fast: 100ms;
+  --motion-duration-standard: 200ms;
+  --motion-duration-emphasized: 400ms;
+  --motion-easing-linear: linear;
+  --motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-easing-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1.0);
+}
+
+/* Smooth Theme Transitions */
+html {
+  transition: background-color var(--motion-duration-standard) var(--motion-easing-standard),
+              color var(--motion-duration-standard) var(--motion-easing-standard);
+}
+
+* {
+  transition: background-color var(--motion-duration-standard) var(--motion-easing-standard),
+              border-color var(--motion-duration-standard) var(--motion-easing-standard),
+              color var(--motion-duration-standard) var(--motion-easing-standard),
+              box-shadow var(--motion-duration-fast) var(--motion-easing-linear);
+}
