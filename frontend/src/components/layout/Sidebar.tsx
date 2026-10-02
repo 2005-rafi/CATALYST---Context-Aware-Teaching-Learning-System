@@ -1,12 +1,13 @@
 'use client';
 
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Server, Settings, Database, Moon, Sun, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, Server, Moon, Sun, Database, Menu, X, ArrowLeft } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { useEffect, useState, useCallback } from 'react';
 import { getSystemHealth } from '@/lib/api';
 import { HEALTH_STATUS_CONFIG, POLLING_INTERVALS, HealthStatus } from '@/lib/constants';
+import { IconButton } from '../primitives';
 
 const navItems = [
   { name: 'Workspaces', href: '/', icon: LayoutDashboard },
@@ -17,13 +18,17 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [systemStatus, setSystemStatus] = useState<HealthStatus>('operational');
 
-  // Avoid hydration mismatch
   useEffect(() => {
-    const timer = setTimeout(() => setMounted(true), 0);
-    return () => clearTimeout(timer);
+    setMounted(true);
   }, []);
+
+  // Close mobile drawer on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   const checkConnection = useCallback(async () => {
     try {
@@ -47,16 +52,16 @@ export default function Sidebar() {
 
     const startPolling = () => {
       if (intervalId) clearInterval(intervalId);
-      if (document.hidden) return; // Don't poll when tab is backgrounded
-      
-      const intervalMs = systemStatus === 'offline' 
-        ? POLLING_INTERVALS.HEALTH_CHECK_RETRY_MS 
-        : POLLING_INTERVALS.HEALTH_CHECK_MS;
+      if (document.hidden) return;
+
+      const intervalMs =
+        systemStatus === 'offline'
+          ? POLLING_INTERVALS.HEALTH_CHECK_RETRY_MS
+          : POLLING_INTERVALS.HEALTH_CHECK_MS;
 
       intervalId = setInterval(executePoll, intervalMs);
     };
 
-    // Initial check on mount if visible
     void executePoll();
     startPolling();
 
@@ -83,70 +88,122 @@ export default function Sidebar() {
 
   const currentConfig = HEALTH_STATUS_CONFIG[systemStatus];
 
-  return (
-    <aside className="w-64 bg-surface-container-low border-r border-border h-screen flex flex-col hidden md:flex transition-colors duration-300">
-      <div className="p-6">
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tight text-primary transition-colors hover:text-on-primary-container">
-          <Database className="w-6 h-6" />
-          <span>CATALYST</span>
-        </Link>
-        <p className="text-xs text-on-surface-variant mt-1">Context Aware Teaching & Learning</p>
-      </div>
+  const sidebarContent = (
+    <div className="flex flex-col h-full bg-surface-container-low border-r border-outline-variant p-4 justify-between">
+      {/* Top Branding & Nav */}
+      <div className="flex flex-col gap-6">
+        {/* App Title */}
+        <div className="flex items-center justify-between px-2 pt-2">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="w-8 h-8 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center shadow-xs transition-transform group-hover:scale-105">
+              <Database className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <span className="font-bold text-sm tracking-tight text-on-surface">CATALYST</span>
+              <p className="text-[10px] text-on-surface-variant leading-none mt-0.5">Context Intelligence</p>
+            </div>
+          </Link>
 
-      <nav className="flex-1 px-4 space-y-2 mt-4">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 ${
-                isActive
-                  ? 'bg-primary-container text-on-primary-container font-medium shadow-sm'
-                  : 'text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container'
-              }`}
-            >
-              <item.icon className="w-5 h-5" />
-              <span>{item.name}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Backend Disconnected Warning */}
-      {systemStatus === 'offline' && (
-        <div className="mx-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-md text-rose-500 flex items-start gap-2 animate-pulse">
-          <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-xs font-semibold">Backend Offline</p>
-            <p className="text-[10px] opacity-80 mt-0.5">Retrying connection on port 8000...</p>
+          {/* Mobile close button */}
+          <div className="md:hidden">
+            <IconButton label="Close menu" size="sm" onClick={() => setMobileOpen(false)}>
+              <X className="w-4 h-4" />
+            </IconButton>
           </div>
         </div>
-      )}
 
-      <div className="p-4 border-t border-border mt-auto flex flex-col gap-2">
-        {/* Dynamic Status Indicator */}
-        <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-on-surface-variant">
-          <span className={`w-2 h-2 rounded-full ${currentConfig.dotClass}`} />
-          <span className="capitalize">{currentConfig.label}</span>
-        </div>
+        {/* Navigation Links */}
+        <nav className="flex flex-col gap-1">
+          {navItems.map((item) => {
+            const isActive =
+              pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 ${
+                  isActive
+                    ? 'bg-primary-container text-on-primary-container font-semibold shadow-xs'
+                    : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+                }`}
+              >
+                <item.icon className="w-4 h-4 flex-shrink-0" />
+                <span>{item.name}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
 
-        <button 
-          className="flex items-center gap-3 px-3 py-2 w-full text-left rounded-md text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container transition-all duration-200"
+      {/* Bottom Status & Theme Control */}
+      <div className="flex flex-col gap-3 pt-4 border-t border-outline-variant/60">
+        {/* System Health Dot */}
+        <Link
+          href="/health"
+          className="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-container text-xs text-on-surface hover:bg-surface-container-high transition-colors"
         >
-          <Settings className="w-5 h-5" />
-          <span>Settings</span>
-        </button>
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${currentConfig.dotClass}`} />
+            <span className="font-medium text-[11px]">{currentConfig.label}</span>
+          </div>
+        </Link>
+
+        {/* Theme Switcher Button */}
         {mounted && (
-          <button 
+          <button
             onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-            className="flex items-center gap-3 px-3 py-2 w-full text-left rounded-md text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container transition-all duration-200"
+            className="flex items-center justify-between px-3 py-2 rounded-lg text-xs text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
           >
-            {resolvedTheme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            <span>{resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+            <span className="font-medium">Theme</span>
+            <div className="flex items-center gap-1.5 text-[11px]">
+              {resolvedTheme === 'dark' ? (
+                <>
+                  <Moon className="w-3.5 h-3.5 text-primary" />
+                  <span>Dark</span>
+                </>
+              ) : (
+                <>
+                  <Sun className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Light</span>
+                </>
+              )}
+            </div>
           </button>
         )}
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Mobile Top Bar with Hamburger */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-surface-container-low border-b border-outline-variant px-4 flex items-center justify-between z-40">
+        <Link href="/" className="flex items-center gap-2">
+          <Database className="w-5 h-5 text-primary" />
+          <span className="font-bold text-sm text-on-surface">CATALYST</span>
+        </Link>
+        <IconButton label="Open navigation" size="sm" onClick={() => setMobileOpen(true)}>
+          <Menu className="w-5 h-5" />
+        </IconButton>
+      </div>
+
+      {/* Desktop Persistent Sidebar */}
+      <aside className="hidden md:flex w-60 h-screen flex-shrink-0 z-30">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Drawer */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+            onClick={() => setMobileOpen(false)}
+          />
+          <div className="relative w-64 h-full z-10 animate-in slide-in-from-left duration-200">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
