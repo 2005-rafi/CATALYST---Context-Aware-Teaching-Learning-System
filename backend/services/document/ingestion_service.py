@@ -142,24 +142,28 @@ class SQLCacheStage(IngestionStage):
         
         chunk_ids = []
         chunk_texts = []
+        batch_tuples = []
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         
         for chunk_data in chunks:
             chunk_id = str(uuid.uuid4())
-            self.chunk_repo.create_chunk(
-                chunk_id=chunk_id,
-                workspace_id=workspace_id,
-                document_id=document_id,
-                chunk_index=chunk_data.chunk_index,
-                chunk_text=chunk_data.text,
-                token_count=chunk_data.token_count,
-                created_at=now,
-                page_number=chunk_data.page_number,
-                section_heading=chunk_data.section_heading
-            )
+            batch_tuples.append((
+                chunk_id,
+                workspace_id,
+                document_id,
+                chunk_data.chunk_index,
+                chunk_data.text,
+                chunk_data.token_count,
+                now,
+                chunk_data.page_number,
+                chunk_data.section_heading
+            ))
             chunk_ids.append(chunk_id)
             chunk_texts.append(chunk_data.text)
             
+        # Execute single-transaction batch insert
+        await asyncio.to_thread(self.chunk_repo.create_chunks_batch, batch_tuples)
+        
         payload["chunk_ids"] = chunk_ids
         payload["chunk_texts"] = chunk_texts
         

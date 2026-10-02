@@ -14,3 +14,10 @@ class BaseRepository:
                 return [dict(r) for r in rows]
             else:
                 return cursor.lastrowid if cursor.lastrowid else cursor.rowcount
+
+    def _executemany(self, sql: str, seq_of_params: list):
+        with db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.executemany(sql, seq_of_params)
+            return cursor.rowcount
+

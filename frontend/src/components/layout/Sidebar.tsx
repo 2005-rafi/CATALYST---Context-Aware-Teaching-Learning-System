@@ -35,21 +35,51 @@ export default function Sidebar() {
     }
   }, []);
 
-  // Graceful polling interval from centralized config
+  // Visibility-aware and state-adaptive polling
   useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
     let isCancelled = false;
-    const poll = async () => {
-      if (!isCancelled) {
-        await checkConnection();
+
+    const executePoll = async () => {
+      if (document.hidden || isCancelled) return;
+      await checkConnection();
+    };
+
+    const startPolling = () => {
+      if (intervalId) clearInterval(intervalId);
+      if (document.hidden) return; // Don't poll when tab is backgrounded
+      
+      const intervalMs = systemStatus === 'offline' 
+        ? POLLING_INTERVALS.HEALTH_CHECK_RETRY_MS 
+        : POLLING_INTERVALS.HEALTH_CHECK_MS;
+
+      intervalId = setInterval(executePoll, intervalMs);
+    };
+
+    // Initial check on mount if visible
+    void executePoll();
+    startPolling();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void executePoll();
+        startPolling();
+      } else {
+        if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
       }
     };
-    void poll();
-    const interval = setInterval(poll, POLLING_INTERVALS.HEALTH_CHECK_MS);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       isCancelled = true;
-      clearInterval(interval);
+      if (intervalId) clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [checkConnection]);
+  }, [checkConnection, systemStatus]);
 
   const currentConfig = HEALTH_STATUS_CONFIG[systemStatus];
 

@@ -1,4 +1,5 @@
 from backend.repositories.sqlite.base_repository import BaseRepository
+from backend.repositories.sqlite.database import db_connection
 
 class ChunkRepository(BaseRepository):
     def create_chunk(self, chunk_id: str, workspace_id: str, document_id: str, chunk_index: int, chunk_text: str, token_count: int, created_at: str, page_number: int = None, section_heading: str = None) -> dict:
@@ -11,6 +12,28 @@ class ChunkRepository(BaseRepository):
             (chunk_id, workspace_id, chunk_text)
         )
         return self._execute("SELECT * FROM chunks WHERE chunk_id = ?", (chunk_id,), fetch_one=True)
+
+    def create_chunks_batch(self, chunks_data: list[tuple]) -> None:
+        """
+        Atomically inserts a batch of chunks into both chunks and chunks_fts tables
+        using a single database transaction and executemany.
+        chunks_data: list of tuples (chunk_id, workspace_id, document_id, chunk_index, chunk_text, token_count, created_at, page_number, section_heading)
+        """
+        if not chunks_data:
+            return
+            
+        with db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.executemany(
+                "INSERT INTO chunks (chunk_id, workspace_id, document_id, chunk_index, chunk_text, token_count, created_at, page_number, section_heading) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                chunks_data
+            )
+            fts_data = [(c[0], c[1], c[4]) for c in chunks_data]
+            cursor.executemany(
+                "INSERT INTO chunks_fts (chunk_id, workspace_id, chunk_text) VALUES (?, ?, ?)",
+                fts_data
+            )
+
 
     def get_chunks_by_document(self, document_id: str) -> list[dict]:
         return self._execute(
