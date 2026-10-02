@@ -73,3 +73,21 @@ def test_chat_query_validation(client):
         "query": giant_query
     })
     assert giant_query_resp.status_code == 422
+
+    # Test invalid model mode
+    invalid_mode_resp = client.post("/api/v1/chat/", json={
+        "workspace_id": "nonexistent",
+        "query": "Valid query",
+        "model": "ultra_super_mode"
+    })
+    assert invalid_mode_resp.status_code == 422
+
+    # Test valid modes (simple, medium, expert) do not trigger 422 on schema validation
+    # (they will return 404 for nonexistent workspace, proving schema validation passed)
+    for valid_mode in ["simple", "medium", "expert"]:
+        resp = client.post("/api/v1/chat/", json={
+            "workspace_id": "nonexistent_ws_123",
+            "query": "Valid query",
+            "model": valid_mode
+        })
+        assert resp.status_code == 404  # WorkspaceNotFoundException, NOT 422 Schema Validation Error!

@@ -5,7 +5,7 @@ class ChatRequest(BaseModel):
     # P18 FIX: added max_length to prevent token explosion / DoS via oversized queries
     query: str = Field(..., min_length=1, max_length=4096, description="User query, max 4096 characters")
     workspace_id: str = Field(..., min_length=1, max_length=64)
-    model: str = Field(default="medium", pattern="^(medium|expert)$")
+    model: str = Field(default="medium", pattern="^(simple|medium|expert)$")
 
 class SourceChunk(BaseModel):
     chunk_id: str
