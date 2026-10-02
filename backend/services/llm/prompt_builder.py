@@ -134,4 +134,10 @@ class PromptBuilder:
             if has_evidence:
                 rules.append("- Include bracketed citations [1] for evidence-backed points.")
                 
+        # 3. Universal Markdown Table Formatting Rules
+        rules.append("- Markdown Table Rules:")
+        rules.append("  * Keep every table row strictly on a single line starting and ending with '|'.")
+        rules.append("  * Every row MUST have the EXACT same number of columns as the header.")
+        rules.append("  * Do NOT place raw newlines or extra '|' delimiters inside a table cell. Use `<br /> • ` to separate multiple bullet points inside a single cell (e.g. `| 1 | Air Pollution | • Acid rain <br /> • Ozone depletion | [1] |`).")
+
         return "\n".join(rules)

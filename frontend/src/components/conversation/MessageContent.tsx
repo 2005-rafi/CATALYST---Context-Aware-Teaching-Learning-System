@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { CodeBlock } from './CodeBlock';
 import { StreamingIndicator } from './StreamingIndicator';
 
@@ -12,23 +13,94 @@ export interface MessageContentProps {
 }
 
 /**
- * Pre-processes LLM Markdown text to fix common stream or formatting compression issues:
- * 1. Collapsed single-line tables: converts '| |---|' and '| | row |' into multi-line GFM tables.
- * 2. Dangling pipe delimiters and line transitions.
+ * Pre-processes LLM Markdown text to ensure table alignment and multi-point cell continuity:
+ * 1. Recombines multiline table rows into single logical lines using '<br />'.
+ * 2. Ensures column counts match across all rows.
+ * 3. Prevents bullet points inside a table cell from wrapping into Column 1.
  */
 function normalizeMarkdown(text: string): string {
-  if (!text) return '';
-  let normalized = text;
+  if (!text || !text.includes('|')) return text;
 
-  // Fix collapsed table row boundaries where pipes meet without newlines
-  if (normalized.includes('|')) {
-    // Replace inline table separator patterns '| |---|' with '|\n|---|'
-    normalized = normalized.replace(/\|\s*\|\s*([:\-\|]+)\s*\|\s*\|/g, '|\n| $1 |\n|');
-    // Replace remaining inline row transitions '| |' with '|\n|'
-    normalized = normalized.replace(/\|\s*\|\s*/g, '|\n| ');
+  const lines = text.split('\n');
+  const repaired: string[] = [];
+  let inTable = false;
+  let pendingRow = '';
+  let expectedCols = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Detect table delimiter e.g. |---|---|---|
+    if (/^\|[\s:\-\|]+\|$/.test(trimmed)) {
+      if (pendingRow) {
+        repaired.push(pendingRow);
+        pendingRow = '';
+      }
+      inTable = true;
+      expectedCols = trimmed.split('|').length - 2;
+      repaired.push(trimmed);
+      continue;
+    }
+
+    if (!inTable) {
+      repaired.push(line);
+      continue;
+    }
+
+    // Inside table section
+    if (trimmed === '') {
+      if (pendingRow) {
+        repaired.push(pendingRow);
+        pendingRow = '';
+      }
+      inTable = false;
+      repaired.push(line);
+      continue;
+    }
+
+    if (trimmed.startsWith('|') && !pendingRow) {
+      const cols = trimmed.split('|').length - 2;
+      if (cols >= expectedCols) {
+        repaired.push(trimmed);
+      } else {
+        pendingRow = trimmed;
+      }
+    } else if (pendingRow) {
+      // Re-join multiline cell fragments into the open row
+      if (trimmed.startsWith('|')) {
+        const sub = trimmed.slice(1).trim();
+        pendingRow = `${pendingRow.replace(/\|\s*$/, '').trim()} <br /> ${sub}`;
+      } else {
+        pendingRow = `${pendingRow.replace(/\|\s*$/, '').trim()} <br /> ${trimmed}`;
+      }
+
+      if (pendingRow.endsWith('|')) {
+        const cols = pendingRow.split('|').length - 2;
+        if (cols >= expectedCols) {
+          repaired.push(pendingRow);
+          pendingRow = '';
+        }
+      }
+    } else if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
+      // Stray bullet line inside table lacking leading pipe
+      if (repaired.length > 0 && repaired[repaired.length - 1].startsWith('|')) {
+        let last = repaired.pop()!;
+        last = `${last.replace(/\|\s*$/, '').trim()} <br /> ${trimmed} |`;
+        repaired.push(last);
+      } else {
+        repaired.push(line);
+      }
+    } else {
+      repaired.push(line);
+    }
   }
 
-  return normalized;
+  if (pendingRow) {
+    repaired.push(pendingRow);
+  }
+
+  return repaired.join('\n');
 }
 
 export const MessageContent: React.FC<MessageContentProps> = ({
@@ -41,6 +113,7 @@ export const MessageContent: React.FC<MessageContentProps> = ({
     <div className="prose max-w-none text-on-surface leading-relaxed break-words">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
         components={{
           code({ className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '');

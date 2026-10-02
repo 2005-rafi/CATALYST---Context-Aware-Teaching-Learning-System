@@ -16,8 +16,8 @@ class ResponseFormatter:
         if backtick_count % 2 != 0:
             text += "\n```"
             
-        # Strip raw HTML tags like <br>
-        text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+        # Standardize markdown table structure: ensure rows are intact and <br /> is preserved
+        text = self._sanitize_tables(text)
         
         # Ensure headers have space after #
         text = re.sub(r'^(#{1,6})([^#\s])', r'\1 \2', text, flags=re.MULTILINE)
@@ -28,6 +28,55 @@ class ResponseFormatter:
             return "I could not find sufficient information in the uploaded documents to answer your question."
             
         return text
+
+    def _sanitize_tables(self, text: str) -> str:
+        """
+        Sanitizes Markdown tables:
+        1. Preserves '<br />' inside cells for multi-point bullet items.
+        2. Normalizes table row lines so that stray multiline cell breaks are rejoined.
+        """
+        lines = text.split('\n')
+        sanitized_lines = []
+        in_table = False
+        current_row = []
+
+        for line in lines:
+            stripped = line.strip()
+            
+            # Detect table separator line e.g. |---|---|---|
+            if re.match(r'^\|[\s:\-\|]+\|$', stripped):
+                in_table = True
+                if current_row:
+                    sanitized_lines.append(" | ".join(current_row) + " |")
+                    current_row = []
+                sanitized_lines.append(stripped)
+                continue
+
+            if in_table and stripped.startswith('|') and stripped.endswith('|'):
+                sanitized_lines.append(stripped)
+                continue
+            elif in_table and (stripped.startswith('•') or stripped.startswith('-')) and sanitized_lines:
+                # Stray bullet point that belongs to the previous table cell
+                prev = sanitized_lines.pop()
+                if prev.endswith('|'):
+                    # Insert before the last pipe or citation column
+                    parts = [p.strip() for p in prev.split('|')[1:-1]]
+                    if len(parts) >= 2:
+                        # Append to content cell before citation
+                        target_col = -2 if len(parts) >= 3 and parts[-1].startswith('[') else -1
+                        parts[target_col] += f" <br /> {stripped}"
+                        sanitized_lines.append("| " + " | ".join(parts) + " |")
+                    else:
+                        sanitized_lines.append(prev[:-1] + f" <br /> {stripped} |")
+                else:
+                    sanitized_lines.append(prev + f" <br /> {stripped} |")
+                continue
+            elif in_table and stripped == '':
+                in_table = False
+
+            sanitized_lines.append(line)
+
+        return '\n'.join(sanitized_lines)
         
     def append_sources(self, response_text: str, sources: List[SourceDocument]) -> str:
         if not sources:
