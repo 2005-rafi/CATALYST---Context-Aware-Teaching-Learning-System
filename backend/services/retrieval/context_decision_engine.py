@@ -24,12 +24,14 @@ class ContextDecisionEngine:
         # 1. Filter out low-relevance chunks using Cross-Encoder threshold
         relevant_chunks = [c for c in chunks if c.score >= self.min_score]
         
-        # Fallback: if no chunks pass the strict threshold, preserve the single highest scoring chunk
-        # if its score is reasonably positive (> 0.20), otherwise treat as empty (zero-doc fallback).
+        # Robust Fallback: if no chunks pass the strict threshold, preserve top candidates
+        # that have valid semantic presence (score > 0.001), ensuring no zero-context drop when relevant text exists.
         if not relevant_chunks and chunks:
-            top_candidate = max(chunks, key=lambda x: x.score)
-            if top_candidate.score >= 0.20:
-                relevant_chunks = [top_candidate]
+            # Sort by score descending and take top candidates
+            sorted_candidates = sorted(chunks, key=lambda x: x.score, reverse=True)
+            relevant_chunks = [c for c in sorted_candidates[:3] if c.score > 0.001]
+            if not relevant_chunks and chunks:
+                relevant_chunks = [sorted_candidates[0]]
 
         # 2. Semantic Deduplication across large corpora (e.g. 1000+ chunk books)
         deduped_chunks = self._deduplicate_chunks(relevant_chunks)
@@ -65,11 +67,16 @@ class ContextDecisionEngine:
         seen_snippets = []
 
         for chunk in chunks:
+            # Anchor chunks (structural TOC or top matches with score >= 0.90) are always preserved
+            if chunk.score >= 0.90:
+                unique_chunks.append(chunk)
+                continue
+
             text_sample = chunk.chunk_text.strip().lower()[:150]
             is_dup = False
             for seen in seen_snippets:
                 # Check character prefix overlap
-                if len(text_sample) > 50 and text_sample in seen or seen in text_sample:
+                if len(text_sample) > 50 and (text_sample in seen or seen in text_sample):
                     is_dup = True
                     break
             if not is_dup:

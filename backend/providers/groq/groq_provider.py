@@ -39,7 +39,7 @@ class GroqProvider:
         ]
         return [m for m in fallback_candidates if m][0]
 
-    def generate(self, messages: list[dict], model: str = None) -> str:
+    def generate(self, messages: list[dict], model: str = None, temperature: float = 0.1, max_tokens: int = 2048) -> str:
         candidates = [
             model,
             self.settings.GROQ_MODEL_MEDIUM,
@@ -59,8 +59,8 @@ class GroqProvider:
                 response = self.client.chat.completions.create(
                     messages=messages,
                     model=candidate_model,
-                    temperature=0.0,
-                    max_tokens=1000,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
                 )
                 return response.choices[0].message.content
             except Exception as e:
@@ -74,6 +74,35 @@ class GroqProvider:
                     break
                     
         raise GroqUnavailableException(f"Groq API error: {last_error}")
+
+    def stream(self, messages: list[dict], model: str = None, temperature: float = 0.1, max_tokens: int = 2048):
+        candidates = [
+            model,
+            self.settings.GROQ_MODEL_MEDIUM,
+            self.settings.GROQ_MODEL_EXPERT,
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant"
+        ]
+        unique_models = list(dict.fromkeys([m for m in candidates if m]))
+        
+        for candidate_model in unique_models:
+            try:
+                completion = self.client.chat.completions.create(
+                    messages=messages,
+                    model=candidate_model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True
+                )
+                for chunk in completion:
+                    delta = chunk.choices[0].delta.content if chunk.choices else ""
+                    if delta:
+                        yield delta
+                return
+            except Exception as e:
+                logger.warning(f"Groq streaming failed on '{candidate_model}': {e}")
+                continue
+        raise GroqUnavailableException("Groq streaming failed across all candidate models.")
 
     def get_diagnostics(self) -> dict:
         """

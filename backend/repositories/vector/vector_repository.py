@@ -59,3 +59,29 @@ class VectorRepository(BaseRetriever):
                 results.append((ids_map[idx], float(distances[0][i])))
                 
         return results
+
+    def remove_vectors_by_ids(self, workspace_id: str, chunk_ids_to_remove: set[str]):
+        """
+        Rebuilds the FAISS index for the workspace without the specified deleted chunk IDs,
+        preventing ghost vector pollution in dense semantic search.
+        """
+        index, ids_map = self.faiss_manager.get_or_create_index(workspace_id)
+        if not ids_map or not chunk_ids_to_remove:
+            return
+        
+        remaining_indices = [i for i, cid in enumerate(ids_map) if cid not in chunk_ids_to_remove]
+        if len(remaining_indices) == len(ids_map):
+            return  # Nothing to remove
+            
+        dim = index.d
+        new_index = faiss.IndexFlatIP(dim)
+        new_ids_map = []
+        
+        if remaining_indices:
+            remaining_vectors = np.empty((len(remaining_indices), dim), dtype=np.float32)
+            for new_i, old_i in enumerate(remaining_indices):
+                remaining_vectors[new_i] = index.reconstruct(old_i)
+                new_ids_map.append(ids_map[old_i])
+            new_index.add(remaining_vectors)
+            
+        self.faiss_manager.save_index(workspace_id, new_index, new_ids_map)

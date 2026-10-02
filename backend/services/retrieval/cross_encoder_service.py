@@ -1,9 +1,21 @@
+import math
 from typing import List, Tuple
 from backend.core.config.settings import get_settings
 from backend.models.chat import RetrievedChunk
 from backend.providers.embeddings.cross_encoder_provider import get_cross_encoder_provider
 from backend.repositories.sqlite.chunk_repository import ChunkRepository
 from backend.repositories.sqlite.document_repository import DocumentRepository
+
+def sigmoid(score: float) -> float:
+    """Calibrate unbounded raw cross-encoder logits into [0, 1] probability range."""
+    try:
+        if score > 20:
+            return 1.0
+        elif score < -20:
+            return 0.0
+        return 1.0 / (1.0 + math.exp(-float(score)))
+    except OverflowError:
+        return 0.0 if score < 0 else 1.0
 
 class CrossEncoderService:
     def __init__(self):
@@ -32,16 +44,16 @@ class CrossEncoderService:
         if not texts_to_score:
             return []
             
-        # Get scores
-        scores = self.provider.predict(query, texts_to_score)
+        # Get raw logits from cross-encoder model
+        raw_scores = self.provider.predict(query, texts_to_score)
         
-        # Zip and filter
+        # Convert logits to calibrated probabilities via sigmoid
         scored_chunks = []
-        for chunk_id, score in zip(valid_candidates, scores):
-            if score >= self.min_score:
-                scored_chunks.append((chunk_id, score))
+        for chunk_id, raw_score in zip(valid_candidates, raw_scores):
+            calibrated_score = sigmoid(raw_score)
+            scored_chunks.append((chunk_id, calibrated_score))
                 
-        # Sort descending
+        # Sort descending by calibrated score
         scored_chunks.sort(key=lambda x: x[1], reverse=True)
         scored_chunks = scored_chunks[:top_n]
         

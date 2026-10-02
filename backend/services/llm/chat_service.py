@@ -14,20 +14,20 @@ import logging
 from backend.repositories.sqlite.workspace_repository import WorkspaceRepository
 from backend.core.exceptions.exceptions import WorkspaceNotFoundException
 
+from backend.services.agents.retrieval_orchestrator_agent import RetrievalOrchestratorAgent
+from backend.services.agents.pedagogical_synthesis_agent import PedagogicalSynthesisAgent
+
 logger = logging.getLogger(__name__)
 from backend.core.config.settings import get_settings
 
 class ChatService:
     def __init__(self):
         self.workspace_repo = WorkspaceRepository()
-        self.context_builder = ContextBuilder()
+        self.retrieval_agent = RetrievalOrchestratorAgent()
+        self.synthesis_agent = PedagogicalSynthesisAgent()
+        
         self.summarization_service = SummarizationService()
         self.summary_repo = WorkspaceSummaryRepository()
-        
-        self.formatter = ResponseFormatter()
-        self.prompt_builder = PromptBuilder()
-        self.failover_manager = FailoverManager()
-        
         self.conversation_repo = ConversationRepository()
         self.analytics_service = AnalyticsService()
         self.settings = get_settings()
@@ -39,26 +39,22 @@ class ChatService:
         start_time = time.time()
         logger.info("Query received", extra={"workspace_id": workspace_id, "query_length": len(query), "model_type": model_type})
         
-        # 1. Build Context Package
-        # Mode determines strictness and verbosity in the prompt
-        context = self.context_builder.build(workspace_id, query, mode=model_type)
+        # 1. Agent 1: Research & Retrieval Orchestration
+        context = self.retrieval_agent.orchestrate(workspace_id, query, mode=model_type)
         
         retrieval_time_ms = int((time.time() - start_time) * 1000)
-        logger.info("Context built", extra={"workspace_id": workspace_id, "retrieved_chunks": len(context.retrieved_chunks), "confidence": context.confidence.level, "duration_ms": retrieval_time_ms})
+        logger.info("Context orchestrated", extra={
+            "workspace_id": workspace_id, 
+            "retrieved_chunks": len(context.retrieved_chunks), 
+            "confidence": context.confidence.level, 
+            "duration_ms": retrieval_time_ms
+        })
         
-        # 2. Determine actual LLM model and Generate Response (via failover)
-        # Format Prompt
-        messages = self.prompt_builder.build_from_context(context)
-        
-        # Generate Response
-        raw_response, actual_model = self.failover_manager.generate(messages, mode=model_type)
-        
-        # Format and Append Sources
-        clean_response = self.formatter.validate_and_clean(raw_response)
-        response_text = self.formatter.append_sources(clean_response, context.sources)
+        # 2. Agent 2: Pedagogical Synthesis & Content Architect
+        response_text, actual_model, _ = self.synthesis_agent.synthesize(context, mode=model_type)
             
         processing_time_ms = int((time.time() - start_time) * 1000)
-        logger.info("LLM generation completed", extra={"workspace_id": workspace_id, "model_used": actual_model, "response_length": len(response_text), "duration_ms": processing_time_ms})
+        logger.info("Agentic synthesis completed", extra={"workspace_id": workspace_id, "model_used": actual_model, "response_length": len(response_text), "duration_ms": processing_time_ms})
         
         # 3. Save to Conversation History
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()

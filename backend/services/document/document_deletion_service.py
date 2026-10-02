@@ -69,8 +69,17 @@ class DocumentDeletionService:
             except Exception as e:
                 logger.warning(f"Could not delete file {file_path}: {e}")
 
-        # Step 2: Delete SQLite chunks + FTS5 entries (chunk_repo handles both tables)
+        # Step 2: Delete SQLite chunks + FTS5 entries, and evict FAISS vectors
         try:
+            chunks = self.chunk_repo.get_chunks_by_document(document_id)
+            chunk_ids = {c["chunk_id"] for c in chunks if c.get("chunk_id")}
+            if chunk_ids:
+                try:
+                    self.vector_repo.remove_vectors_by_ids(workspace_id, chunk_ids)
+                    logger.info(f"Evicted {len(chunk_ids)} vectors from FAISS index for document: {document_id}")
+                except Exception as ve:
+                    logger.warning(f"Could not evict FAISS vectors for document {document_id}: {ve}")
+
             self.chunk_repo.delete_chunks_by_document(document_id)
             logger.info(f"Deleted chunks for document: {document_id}")
         except Exception as e:

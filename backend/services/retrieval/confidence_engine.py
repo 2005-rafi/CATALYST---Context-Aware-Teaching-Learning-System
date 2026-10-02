@@ -21,40 +21,39 @@ class ConfidenceEngine:
         Evaluates retrieval confidence based on a hybrid score-and-count metric,
         assessing both the top chunk match quality and supporting evidence count.
         """
-        passing = [c for c in chunks if c.score >= self.min_score]
-        
-        if not passing:
+        if not chunks:
             return ConfidenceResult(
                 level="LOW", 
                 sufficient=False, 
                 chunk_count=0, 
-                message="No relevant snippets found matching the query context."
+                message="No relevant snippets found in workspace documents."
             )
             
-        max_score = max(c.score for c in passing)
+        max_score = max(c.score for c in chunks)
+        passing = [c for c in chunks if c.score >= 0.40]
         
-        # High confidence requires both a high-quality top match and supporting chunks
-        if max_score >= self.high_confidence_threshold and len(passing) >= 2:
+        # High confidence requires strong calibrated match
+        if max_score >= self.high_confidence_threshold:
             return ConfidenceResult(
                 level="HIGH", 
                 sufficient=True, 
-                chunk_count=len(passing), 
+                chunk_count=len(chunks), 
                 message="Strong matching context found."
             )
             
-        # Medium confidence requires at least a decent match or some passing evidence
-        if max_score >= self.medium_confidence_threshold:
+        # Medium confidence requires moderate match or passing evidence
+        if max_score >= 0.40 or len(passing) > 0:
             return ConfidenceResult(
                 level="MEDIUM", 
                 sufficient=True, 
-                chunk_count=len(passing), 
+                chunk_count=len(chunks), 
                 message="Partial matching context found."
             )
             
-        # Default fallback to low confidence if scores are marginally below medium threshold
+        # Default fallback with evidence still surfaced to LLM
         return ConfidenceResult(
             level="LOW", 
-            sufficient=False, 
-            chunk_count=len(passing), 
-            message="Low relevance matches detected."
+            sufficient=True, 
+            chunk_count=len(chunks), 
+            message="Low relevance matches detected; synthesizing with cautious grounding."
         )

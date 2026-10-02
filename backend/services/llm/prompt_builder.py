@@ -9,10 +9,10 @@ class PromptBuilder:
     """
 
     def build_from_context(self, context: ContextPackage) -> list[dict]:
-        has_evidence = bool(context.retrieved_chunks and context.confidence.level != "LOW")
+        has_evidence = bool(context.retrieved_chunks and len(context.retrieved_chunks) > 0)
         
         system_prompt = self.build_system_prompt(context.mode, has_evidence)
-        response_rules = self.format_response_rules(context.mode, context.confidence.level, has_evidence)
+        response_rules = self.format_response_rules(context.mode, context.confidence.level, has_evidence, context.workspace_summary)
         
         # Construct prompt ensuring the static parts are at the very top (prefix)
         # to maximize LLM Prompt Caching hits.
@@ -32,8 +32,8 @@ class PromptBuilder:
         else:
             parts.append(
                 "=== Workspace Document Evidence ===\n"
-                "[No relevant documents matched in workspace for this specific query. "
-                "Synthesize a comprehensive, high-quality pedagogical explanation using foundational academic knowledge.]"
+                "[No relevant document chunks matched for this specific query. "
+                "Synthesize a comprehensive, high-quality pedagogical explanation using foundational academic principles.]"
             )
         
         # Dynamic chat history
@@ -55,8 +55,8 @@ class PromptBuilder:
         
     def build_system_prompt(self, mode: str, has_evidence: bool) -> str:
         base = (
-            "You are an expert academic tutor and research intelligence mentor designed to help students "
-            "and researchers master complex concepts rapidly through structured, clear, and rigorous explanations."
+            "You are an expert academic tutor, educational architect, and research intelligence mentor "
+            "designed to help students and researchers master complex concepts rapidly through structured, clear, and rigorous explanations."
         )
         if has_evidence:
             base += (
@@ -65,7 +65,7 @@ class PromptBuilder:
             )
         else:
             base += (
-                "\nWhen no workspace document evidence is provided, use your broad academic and scientific knowledge "
+                "\nWhen no specific workspace document snippets match, use your broad academic and scientific knowledge "
                 "to provide an exhaustive, clear, step-by-step breakdown from first principles."
             )
         return f"=== System Persona & Role ===\n{base}"
@@ -91,27 +91,28 @@ class PromptBuilder:
             
         return "\n\n".join(parts)
         
-    def format_response_rules(self, mode: str, confidence_level: str, has_evidence: bool) -> str:
+    def format_response_rules(self, mode: str, confidence_level: str, has_evidence: bool, workspace_summary: str = "") -> str:
         rules = ["=== Pedagogical Formatting & Grounding Rules ==="]
         
-        # 1. Grounding & Hallucination Rules
+        # 1. Grounding & Anti-Hallucination Rules
         if has_evidence:
-            if confidence_level == "MEDIUM":
-                rules.append("- Evidence Scope: Moderate evidence found in uploaded files. Base your core facts strictly on the snippets, and note where details are omitted.")
-            else:
-                rules.append("- Evidence Scope: High-confidence evidence found. Ground all key claims in the provided snippets.")
+            rules.append("- Document Grounding: Workspace documents are uploaded and active. Carefully analyze the provided snippets.")
+            rules.append("- Zero-Hallucination Mandate: Do NOT state that 'no documents exist' or that 'no workspace files are available'. Base your response directly on the provided snippets.")
             rules.append("- Source Citations: Cite your sources using bracketed numbers corresponding to the snippet, e.g. [1], [2].")
             rules.append("- Strict Negative Constraint: Do not invent page numbers, authors, or quotes not present in the snippets.")
+            rules.append("- Lesson / Curriculum Requests: If the user asks to list lesson names, chapters, or syllabus topics, extract and enumerate EVERY chapter/lesson listed in the snippets under its respective Unit, stating the chapter number and full title.")
         else:
-            rules.append("- Evidence Scope: No workspace document snippets matched. Answer directly using foundational scientific/academic knowledge.")
-            rules.append("- Transparency: Clearly state that this explanation is based on general academic principles.")
+            if workspace_summary and "Uploaded Workspace Files" in workspace_summary and "None" not in workspace_summary:
+                rules.append("- Document Scope: Workspace files are uploaded, but no direct semantic chunk matched this specific prompt. Synthesize your answer using core academic knowledge while acknowledging the uploaded subject matter.")
+            else:
+                rules.append("- Evidence Scope: No workspace document snippets matched. Answer directly using foundational scientific/academic knowledge.")
             rules.append("- Negative Constraint: Do NOT generate artificial snippet citation brackets like [1] or [2] when no documents were retrieved.")
 
         # 2. Structural Scaffolding for Learning
         if mode == "expert":
             rules.append("- Use rich, structured Markdown with the following mandatory sections:")
-            rules.append("  1. `### 🎯 Core Concept / Summary`: 2-3 sentence intuitive overview of the topic.")
-            rules.append("  2. `### 📖 Step-by-Step Breakdown & Mechanism`: In-depth breakdown with bullet points, numbered mechanisms, and **bold key terms**.")
+            rules.append("  1. `### 🎯 Core Concept / Summary`: 2-3 sentence intuitive overview of the topic or document structure.")
+            rules.append("  2. `### 📖 Detailed Breakdown / Curriculum`: In-depth breakdown with bullet points, numbered lessons/mechanisms, and **bold key terms**.")
             if has_evidence:
                 rules.append("  3. `### 🔬 Document Evidence & Analysis`: Deep dive grounded in the retrieved snippets with citations.")
             else:

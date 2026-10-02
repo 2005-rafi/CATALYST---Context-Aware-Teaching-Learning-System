@@ -59,6 +59,25 @@ class ChunkRepository(BaseRepository):
             fetch_all=True
         )
 
+    def get_front_matter_and_toc_chunks(self, workspace_id: str, limit: int = 10) -> list[dict]:
+        """
+        Retrieves front-matter (pages 1-10) and chunks containing structural markers
+        (CONTENTS, Chapter, Unit, Syllabus, Table of Contents) for global overview queries.
+        """
+        query = """
+            SELECT * FROM chunks 
+            WHERE workspace_id = ? AND (
+                page_number <= 10 
+                OR chunk_text LIKE '%CONTENTS%' 
+                OR chunk_text LIKE '%Table of Contents%' 
+                OR chunk_text LIKE '%Chapter 1%' 
+                OR chunk_text LIKE '%Unit I%'
+            )
+            ORDER BY page_number ASC, chunk_index ASC
+            LIMIT ?
+        """
+        return self._execute(query, (workspace_id, limit), fetch_all=True)
+
     def update_embedding_ref(self, chunk_id: str, embedding_ref: str):
         self._execute(
             "UPDATE chunks SET embedding_ref = ? WHERE chunk_id = ?",
