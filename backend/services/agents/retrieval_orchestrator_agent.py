@@ -14,6 +14,7 @@ from backend.services.retrieval.context_decision_engine import ContextDecisionEn
 from backend.services.retrieval.confidence_engine import ConfidenceEngine
 from backend.services.retrieval.source_attributor import SourceAttributor
 from backend.services.memory.context_window import ContextWindow
+from backend.services.nlp.query_reformulator import QueryReformulatorPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +22,14 @@ class RetrievalOrchestratorAgent:
     """
     Agent 1: Intelligent Research & Retrieval Orchestrator.
     Responsible for:
-    1. Query Intent Classification & Deconstruction
-    2. Typo Normalization & Multi-Query Expansion
-    3. Structural / Table-of-Contents Routing (for global book queries)
-    4. Hybrid Dense (FAISS) + Sparse (BM25) Retrieval with Reciprocal Rank Fusion (RRF)
-    5. Calibrated Cross-Encoder Reranking
-    6. Context Package Synthesis with Provenance Metadata
+    1. Query Understanding & Corpus-Aware Spelling Recovery (via RapidFuzz against indexed vocabulary)
+    2. Multi-Query Formulation ("Never trust correction alone - search original + canonical + concepts")
+    3. Disambiguated Intent Classification (Distinguishing Book Structure TOC vs Subject Topics)
+    4. Structural / Table-of-Contents Routing (for global book queries)
+    5. Multi-Query Hybrid Dense (FAISS) + Sparse (BM25) Retrieval with Reciprocal Rank Fusion (RRF)
+    6. Calibrated Sigmoid Cross-Encoder Reranking
+    7. Adaptive Evidence Verification & Gap Recovery (auto-retrieves chapter body chunks if only TOC returned)
+    8. Context Package Synthesis with Provenance Metadata
     """
     def __init__(self):
         self.chunk_repo = ChunkRepository()
@@ -39,6 +42,7 @@ class RetrievalOrchestratorAgent:
         self.confidence_engine = ConfidenceEngine()
         self.source_attributor = SourceAttributor()
         self.context_window = ContextWindow()
+        self.reformulator = QueryReformulatorPipeline()
 
     def orchestrate(
         self, 
@@ -50,39 +54,43 @@ class RetrievalOrchestratorAgent:
         """
         Executes end-to-end multi-stage agentic retrieval and evidence structuring.
         """
-        # 1. Query Normalization & Typo Repair
-        normalized_query = self._normalize_query(query)
-        logger.info(f"[Agent 1: RetrievalOrchestrator] Normalized query: '{query}' -> '{normalized_query}'")
+        # 1. Advanced NLP Query Understanding, Corpus-Aware Spelling & Intent Disambiguation
+        nlp_res = self.reformulator.process_query(query, workspace_id)
+        canonical_query = nlp_res["canonical_query"]
+        intent = nlp_res["intent"]
+        retrieval_queries = nlp_res["retrieval_queries"]
+        corrections = nlp_res["corrections"]
+        
+        logger.info(
+            f"[Agent 1: RetrievalOrchestrator] Processed query: '{query}' -> '{canonical_query}' "
+            f"(intent={intent}, corrections={corrections})"
+        )
 
-        # 2. Intent Classification
-        intent = self._classify_intent(normalized_query)
-        logger.info(f"[Agent 1: RetrievalOrchestrator] Detected Query Intent: {intent}")
-
-        # 3. Retrieve Workspace Documents for Grounding Context
+        # 2. Retrieve Workspace Documents for Grounding Context
         workspace_docs = self.doc_repo.get_documents_by_workspace(workspace_id)
         
-        # 4. Multi-Route Retrieval
+        # 3. Multi-Route Retrieval
         candidates: List[Tuple[str, float]] = []
 
-        if intent == "STRUCTURAL_OVERVIEW":
-            # Path A: Structural / TOC Exploration
-            candidates = self._execute_structural_retrieval(workspace_id, normalized_query)
+        if intent in ("BOOK_STRUCTURE_TOC", "STRUCTURAL_OVERVIEW"):
+            # Path A: Structural / TOC Exploration (strictly for book syllabus/chapter list outline)
+            candidates = self._execute_structural_retrieval(workspace_id, canonical_query)
         else:
-            # Path B: Standard Hybrid Search (Dense + Sparse + RRF)
-            candidates = self._execute_hybrid_retrieval(workspace_id, normalized_query)
+            # Path B: Multi-Query Hybrid Search (Dense + Sparse + RRF across original + canonical + concepts)
+            candidates = self._execute_multi_query_hybrid_retrieval(workspace_id, retrieval_queries)
 
-        # 5. Calibrated Cross-Encoder Reranking
+        # 4. Calibrated Cross-Encoder Reranking
         top_k_rerank = 6
         reranked_chunks: List[RetrievedChunk] = []
         if candidates:
             reranked_chunks = self.cross_encoder_service.rerank(
-                query=normalized_query, 
+                query=canonical_query, 
                 candidates=candidates, 
                 top_n=top_k_rerank
             )
 
-        # 5b. Anchor Primary Structural / TOC Chunks (for global book overview queries)
-        if intent == "STRUCTURAL_OVERVIEW":
+        # 4b. Anchor Primary Structural / TOC Chunks (ONLY for book structure outline queries)
+        if intent in ("BOOK_STRUCTURE_TOC", "STRUCTURAL_OVERVIEW"):
             raw_toc_chunks = self.chunk_repo.get_front_matter_and_toc_chunks(workspace_id, limit=8)
             for c in raw_toc_chunks:
                 text = c["chunk_text"]
@@ -102,11 +110,26 @@ class RetrievalOrchestratorAgent:
                     reranked_chunks.insert(0, anchor_chunk)
                     break
 
-        # 6. Intent-Guided Context Refinement & Deduplication
+        # 5. Intent-Guided Context Refinement & Deduplication
         engineered_chunks = self.context_decision_engine.decide(
-            query=normalized_query, 
+            query=canonical_query, 
             chunks=reranked_chunks
         )
+
+        # 6. Adaptive Evidence Verification & Gap Recovery Gate
+        # If user asked about a specific topic (e.g. Chapter 13 or environmental issues)
+        # but only TOC chunks were retrieved, adaptively fetch substantive chapter body chunks
+        has_gap, target_query = self.reformulator.detect_evidence_gap(canonical_query, engineered_chunks)
+        if has_gap and target_query:
+            logger.warning(f"[Agent 1] Adaptive Recovery triggered for gap query: '{target_query}'")
+            fallback_candidates = self._execute_multi_query_hybrid_retrieval(workspace_id, [target_query])
+            if fallback_candidates:
+                fallback_reranked = self.cross_encoder_service.rerank(target_query, fallback_candidates, top_n=5)
+                existing_ids = {c.chunk_id for c in engineered_chunks}
+                new_body_chunks = [c for c in fallback_reranked if c.chunk_id not in existing_ids]
+                if new_body_chunks:
+                    logger.info(f"[Agent 1] Adaptive Recovery added {len(new_body_chunks)} body chunks.")
+                    engineered_chunks = self.context_decision_engine.decide(canonical_query, new_body_chunks + engineered_chunks)
 
         # 7. Confidence & Grounding Evaluation
         confidence = self.confidence_engine.evaluate(engineered_chunks)
@@ -142,59 +165,10 @@ class RetrievalOrchestratorAgent:
             mode=mode
         )
 
-    def _normalize_query(self, query: str) -> str:
-        """
-        Normalizes common academic and typographic errors in queries.
-        """
-        q = query.strip()
-        # Common typos in academic student inquiries
-        replacements = [
-            (r'\blession\b', 'lesson'),
-            (r'\blessions\b', 'lessons'),
-            (r'\bchater\b', 'chapter'),
-            (r'\bchaters\b', 'chapters'),
-            (r'\bsylabus\b', 'syllabus'),
-            (r'\btopicss\b', 'topics'),
-            (r'\bzoologyy\b', 'zoology'),
-            (r'\bbiologi\b', 'biology')
-        ]
-        for pattern, repl in replacements:
-            q = re.sub(pattern, repl, q, flags=re.IGNORECASE)
-        return q
-
-    def _classify_intent(self, query: str) -> str:
-        """
-        Classifies intent into structural, factoid, conceptual, comparative, or quantitative.
-        """
-        q_lower = query.lower()
-
-        # Structural & Overview queries (TOC, lesson lists, chapter counts, syllabus)
-        structural_keywords = [
-            "lesson", "lessons", "chapter", "chapters", "table of contents", "contents", 
-            "index", "syllabus", "curriculum", "all topics", "list all", "how many chapter", 
-            "how many lesson", "book overview", "units", "unit i", "unit 1"
-        ]
-        if any(kw in q_lower for kw in structural_keywords):
-            return "STRUCTURAL_OVERVIEW"
-
-        comparative_keywords = ["vs", "versus", "difference between", "compare", "contrast", "distinguish"]
-        if any(kw in q_lower for kw in comparative_keywords):
-            return "COMPARATIVE"
-
-        quantitative_keywords = ["count", "number of", "percentage", "formula", "ratio", "how many", "total"]
-        if any(kw in q_lower for kw in quantitative_keywords):
-            return "QUANTITATIVE"
-
-        pedagogical_keywords = ["explain", "mechanism", "how does", "why does", "describe", "steps", "process", "pathway"]
-        if any(kw in q_lower for kw in pedagogical_keywords):
-            return "CONCEPTUAL"
-
-        return "FACTOID"
-
     def _execute_structural_retrieval(self, workspace_id: str, query: str) -> List[Tuple[str, float]]:
         """
         Retrieves structural context (front matter, Table of Contents, chapter listings)
-        alongside expanded hybrid keyword search.
+        alongside expanded hybrid keyword search for whole-book outlines.
         """
         candidates_map: Dict[str, float] = {}
 
@@ -202,7 +176,6 @@ class RetrievalOrchestratorAgent:
         toc_chunks = self.chunk_repo.get_front_matter_and_toc_chunks(workspace_id, limit=8)
         for rank, chunk in enumerate(toc_chunks):
             chunk_id = chunk["chunk_id"]
-            # Structural chunks get strong initial baseline prior
             candidates_map[chunk_id] = 1.0 / (20 + rank)
 
         # 2. Query expansion tailored for structural retrieval
@@ -228,30 +201,54 @@ class RetrievalOrchestratorAgent:
             except Exception as e:
                 logger.warning(f"[Agent 1] Vector search warning: {e}")
 
-        # Sort combined candidates descending by fusion score
         sorted_candidates = sorted(candidates_map.items(), key=lambda x: x[1], reverse=True)
         return sorted_candidates[:25]
 
-    def _execute_hybrid_retrieval(self, workspace_id: str, query: str) -> List[Tuple[str, float]]:
+    def _execute_multi_query_hybrid_retrieval(self, workspace_id: str, queries: List[str]) -> List[Tuple[str, float]]:
         """
-        Standard hybrid retrieval using BM25, FAISS, and Reciprocal Rank Fusion (RRF).
+        Executes multi-query hybrid retrieval across BM25 and FAISS,
+        fusing candidate rankings via Reciprocal Rank Fusion (RRF).
+        Follows the core principle: 'Never trust correction alone - search original + canonical + concepts'.
         """
         candidates_map: Dict[str, float] = {}
 
-        # BM25 Lexical Search
-        bm25_hits = self.bm25_repo.search(workspace_id, query, top_k=25)
-        for rank, (cid, score) in enumerate(bm25_hits):
-            rrf_score = 1.0 / (60 + rank + 1)
-            candidates_map[cid] = candidates_map.get(cid, 0.0) + rrf_score
+        for q in queries:
+            if not q.strip():
+                continue
 
-        # FAISS Dense Vector Search
-        try:
-            vec_hits = self.vector_repo.search(workspace_id, query, top_k=25)
-            for rank, (cid, score) in enumerate(vec_hits):
+            # BM25 Lexical Search
+            bm25_hits = self.bm25_repo.search(workspace_id, q, top_k=25)
+            for rank, (cid, score) in enumerate(bm25_hits):
                 rrf_score = 1.0 / (60 + rank + 1)
                 candidates_map[cid] = candidates_map.get(cid, 0.0) + rrf_score
-        except Exception as e:
-            logger.warning(f"[Agent 1] Vector search warning: {e}")
+
+            # FAISS Dense Vector Search
+            try:
+                vec_hits = self.vector_repo.search(workspace_id, q, top_k=25)
+                for rank, (cid, score) in enumerate(vec_hits):
+                    rrf_score = 1.0 / (60 + rank + 1)
+                    candidates_map[cid] = candidates_map.get(cid, 0.0) + rrf_score
+            except Exception as e:
+                logger.warning(f"[Agent 1] Vector search warning on '{q}': {e}")
 
         sorted_candidates = sorted(candidates_map.items(), key=lambda x: x[1], reverse=True)
-        return sorted_candidates[:30]
+        return sorted_candidates[:35]
+
+    def _normalize_query(self, query: str) -> str:
+        """Helper / backward-compatibility normalization for common educational typos."""
+        q = query
+        typo_map = {
+            r'\blession\b': 'lesson',
+            r'\blessions\b': 'lessons',
+            r'\btihnk\b': 'think',
+            r'\bchpater\b': 'chapter',
+            r'\bpreventaion\b': 'prevention'
+        }
+        for pat, rep in typo_map.items():
+            q = re.sub(pat, rep, q, flags=re.IGNORECASE)
+        return self.reformulator._normalize_whitespace(q)
+
+    def _classify_intent(self, query: str) -> str:
+        """Helper / backward-compatibility method delegating to QueryReformulatorPipeline."""
+        return self.reformulator.classify_intent(query)
+

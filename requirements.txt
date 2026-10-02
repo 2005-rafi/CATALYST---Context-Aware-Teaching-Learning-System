@@ -19,4 +19,4 @@ transformers>=4.44.0
 torch>=2.4.0
 scikit-learn>=1.5.1
 pymupdf
-
+rapidfuzz>=3.9.0

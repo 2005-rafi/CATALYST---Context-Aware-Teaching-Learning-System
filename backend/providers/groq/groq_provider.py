@@ -56,22 +56,19 @@ class GroqProvider:
         last_error = None
         for candidate_model in unique_models:
             try:
+                effective_max_tokens = min(max_tokens, 800) if "qwen" in candidate_model.lower() else max_tokens
                 response = self.client.chat.completions.create(
                     messages=messages,
                     model=candidate_model,
                     temperature=temperature,
-                    max_tokens=max_tokens,
+                    max_tokens=effective_max_tokens,
                 )
                 return response.choices[0].message.content
             except Exception as e:
                 err_msg = str(e)
                 last_error = err_msg
-                if "does not exist" in err_msg or "model_not_found" in err_msg or "404" in err_msg:
-                    logger.warning(f"Groq model '{candidate_model}' unavailable, trying fallback...")
-                    continue
-                else:
-                    logger.error(f"Groq generation failed on '{candidate_model}': {err_msg}")
-                    break
+                logger.warning(f"Groq model '{candidate_model}' failed ({err_msg[:120]}), trying fallback...")
+                continue
                     
         raise GroqUnavailableException(f"Groq API error: {last_error}")
 
@@ -80,6 +77,10 @@ class GroqProvider:
             model,
             self.settings.GROQ_MODEL_MEDIUM,
             self.settings.GROQ_MODEL_EXPERT,
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "qwen/qwen3.8-27b",
+            "allam-2-7b",
             "llama-3.3-70b-versatile",
             "llama-3.1-8b-instant"
         ]
@@ -87,11 +88,12 @@ class GroqProvider:
         
         for candidate_model in unique_models:
             try:
+                effective_max_tokens = min(max_tokens, 800) if "qwen" in candidate_model.lower() else max_tokens
                 completion = self.client.chat.completions.create(
                     messages=messages,
                     model=candidate_model,
                     temperature=temperature,
-                    max_tokens=max_tokens,
+                    max_tokens=effective_max_tokens,
                     stream=True
                 )
                 for chunk in completion:
