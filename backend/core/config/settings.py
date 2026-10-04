@@ -42,10 +42,16 @@ class Settings(BaseSettings):
     # Feature Flags
     ENABLE_BM25: bool = Field(default=True)
     ENABLE_RRF: bool = Field(default=True)
-    ENABLE_CROSS_ENCODER: bool = Field(default=True)
-    ENABLE_LOCAL_MODEL: bool = Field(default=True)
+    # Cross-encoder adds ~250MB RAM; disabled by default for cloud free-tier safety.
+    # Enable explicitly via env var ENABLE_CROSS_ENCODER=true for paid/local use.
+    ENABLE_CROSS_ENCODER: bool = Field(default=False)
+    # Local Ollama model is unavailable on Render (no Ollama process).
+    # Enable explicitly for local development only.
+    ENABLE_LOCAL_MODEL: bool = Field(default=False)
     LOG_LEVEL: str = Field(default="INFO")
-    ENVIRONMENT: str = Field(default="development")
+    ENVIRONMENT: str = Field(default="production")
+    # Embedding micro-batch cap — prevents RSS spike during large PDF ingestion.
+    EMBEDDING_BATCH_SIZE: int = Field(default=32)
 
     ALLOWED_ORIGINS: Union[list[str], str] = Field(
         default=[

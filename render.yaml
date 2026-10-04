@@ -1,9 +1,23 @@
-# Render.com Blueprint Configuration for CATALYST FastAPI Standalone Backend
+# Render.com Blueprint Configuration — CATALYST FastAPI Backend
+# Free-tier optimized: 512MB RAM, CPU-only PyTorch, lazy model loading
+
 services:
   - type: web
     name: catalyst-rag-backend
     runtime: python
-    buildCommand: "pip install --upgrade pip && pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt"
+    # Build order is critical:
+    # 1. Install CPU-only torch FIRST from the official CPU wheel index.
+    # 2. Install all other requirements WITH the constraints file.
+    #    The -c constraints.txt flag prevents sentence-transformers from
+    #    re-resolving torch to the full CUDA build from PyPI (~1.9GB).
+    buildCommand: >-
+      pip install --upgrade pip &&
+      pip install torch==2.1.2+cpu
+        --index-url https://download.pytorch.org/whl/cpu &&
+      pip install
+        --extra-index-url https://download.pytorch.org/whl/cpu
+        -c constraints.txt
+        -r requirements.txt
     startCommand: "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PYTHON_VERSION
@@ -12,26 +26,65 @@ services:
         value: production
       - key: LOG_LEVEL
         value: INFO
+
+      # Ephemeral storage paths (reset on each deploy — acceptable for free tier)
       - key: OFFLINE_MODE
-        value: "false"
+        value: "true"
+
+      # CORS — allow all origins for standalone public API
       - key: ALLOWED_ORIGINS
         value: "*"
+
+      # === Feature Flags — memory-safe defaults for Render free tier ===
+      # Cross-encoder (~250MB extra RAM): disabled
       - key: ENABLE_CROSS_ENCODER
         value: "false"
+      # Local Ollama model: N/A on Render (no Ollama process running)
       - key: ENABLE_LOCAL_MODEL
         value: "false"
+
+      # === CPU Thread Limits ===
+      # Must be set before any numpy/torch import (also set programmatically
+      # in lifespan.py via os.environ.setdefault as a defensive second pass).
       - key: TORCH_NUM_THREADS
         value: "1"
       - key: OMP_NUM_THREADS
         value: "1"
       - key: MKL_NUM_THREADS
         value: "1"
+      - key: NUMEXPR_NUM_THREADS
+        value: "1"
+      - key: OPENBLAS_NUM_THREADS
+        value: "1"
+
+      # === Memory Tuning ===
+      # Tells glibc to return freed heap memory to OS faster.
+      # Reduces RSS "high-water mark" between requests.
+      - key: MALLOC_TRIM_THRESHOLD_
+        value: "65536"
+
+      # Embedding batch cap — prevents memory spike on large PDF ingestion
+      - key: EMBEDDING_BATCH_SIZE
+        value: "32"
+
+      # === HuggingFace Cache ===
+      # Unified cache directory avoids duplicate downloads between deploys
+      - key: TRANSFORMERS_CACHE
+        value: "/opt/render/.cache/huggingface"
+      - key: HF_HUB_CACHE
+        value: "/opt/render/.cache/huggingface"
+
+      # === Embedding Model ===
+      # all-MiniLM-L6-v2: ~90MB RAM, 384-dim, fast and accurate for RAG
       - key: EMBEDDING_MODEL
         value: "sentence-transformers/all-MiniLM-L6-v2"
+
+      # === Secrets (set in Render Dashboard > Environment) ===
       - key: GROQ_API_KEY
-        sync: false  # Must be populated in Render Dashboard Environment Settings
+        sync: false  # Required: set in Render Dashboard Environment Settings
       - key: HF_TOKEN
-        sync: false  # Optional: for HuggingFace rate limits
+        sync: false  # Optional: reduces HuggingFace rate limits on first load
+
     healthCheckPath: /api/v1/system/health
     plan: free
     autoDeploy: true

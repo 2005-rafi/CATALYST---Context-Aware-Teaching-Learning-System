@@ -20,3 +20,26 @@ def get_model_status(service: HealthService = Depends(get_health_service)):
         "groq": service.check_groq(),
         "qwen": service.check_qwen()
     }
+
+
+@router.get("/metrics")
+def get_system_metrics():
+    """Return runtime memory and resource usage for observability on cloud environments."""
+    try:
+        import psutil
+        import os
+        process = psutil.Process(os.getpid())
+        mem_info = process.memory_info()
+        return {
+            "rss_mb": round(mem_info.rss / 1024 / 1024, 2),
+            "vms_mb": round(mem_info.vms / 1024 / 1024, 2),
+            "cpu_percent": process.cpu_percent(interval=None),
+            "threads_count": process.num_threads() if hasattr(process, "num_threads") else 1,
+            "status": "healthy"
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": "degraded"
+        }
+

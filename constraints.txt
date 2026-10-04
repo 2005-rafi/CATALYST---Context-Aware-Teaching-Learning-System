@@ -1,0 +1,15 @@
+# CPU-only PyTorch constraint file for Render.com free-tier deployment.
+#
+# PURPOSE: Prevents pip from re-resolving CUDA torch from PyPI even when
+# sentence-transformers, transformers, or any other dependency declares
+# torch as a transitive requirement. Without this file, pip would overwrite
+# the CPU-only torch installed in the first build step with the full CUDA
+# build (~1.9GB), causing an Out Of Memory error on Render's 512MB instance.
+#
+# USAGE (in render.yaml buildCommand):
+#   pip install -c constraints.txt -r requirements.txt
+#
+# CUDA packages that would otherwise be pulled:
+#   triton, nvidia-cuda-runtime, nvidia-cudnn, nvidia-cublas (~2-3GB total)
+# This file prevents ALL of those from being resolved.
+torch==2.1.2+cpu
