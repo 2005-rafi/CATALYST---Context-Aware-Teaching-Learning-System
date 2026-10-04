@@ -107,7 +107,7 @@ export async function fetchWrapper<T = unknown>(
       }
 
       throw new APIError(
-        'Unable to connect to the backend server. Please verify the backend service is running on port 8000.',
+        `Unable to connect to the backend server at ${API_BASE_URL}. Please verify the backend service is online.`,
         503,
         { originalError: err.message },
         undefined,

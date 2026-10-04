@@ -4,8 +4,9 @@
  * Robust normalization ensures compatibility across local and production (Vercel/Render/Fly.io).
  */
 
-const rawBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').trim().replace(/\/+$/, '');
+const rawBase = (process.env.NEXT_PUBLIC_API_URL || 'https://catalyst-rag-backend.onrender.com').trim().replace(/\/+$/, '');
 export const API_BASE_URL = rawBase.endsWith('/api/v1') ? rawBase : `${rawBase}/api/v1`;
+
 
 export const ENDPOINTS = {
   SYSTEM: {
