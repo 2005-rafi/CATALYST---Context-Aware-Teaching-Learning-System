@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "@/styles/theme/theme.css";
 import "./globals.css";
-import Sidebar from "@/components/layout/Sidebar";
+import UnifiedSidebar from "@/components/layout/UnifiedSidebar";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { WorkspaceSessionProvider } from "@/components/providers/WorkspaceSessionProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,10 +32,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground h-screen flex overflow-hidden`}
       >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <Sidebar />
-          <main className="flex-1 h-screen overflow-y-auto">
-            {children}
-          </main>
+          <WorkspaceSessionProvider>
+            <UnifiedSidebar />
+            <main className="flex-1 h-screen overflow-hidden min-w-0 relative flex flex-col">
+              {children}
+            </main>
+          </WorkspaceSessionProvider>
         </ThemeProvider>
       </body>
     </html>

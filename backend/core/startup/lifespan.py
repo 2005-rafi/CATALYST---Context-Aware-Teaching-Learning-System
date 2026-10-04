@@ -18,6 +18,13 @@ async def lifespan(app: FastAPI):
     logger = get_logger(__name__)
     logger.info("Application starting")
     
+    # Optimize PyTorch CPU threading for low-memory cloud containers (e.g. Render 512MB RAM)
+    try:
+        import torch
+        torch.set_num_threads(1)
+    except Exception:
+        pass
+    
     directories = [
         settings.UPLOADS_PATH,
         settings.FAISS_PATH,
@@ -32,6 +39,13 @@ async def lifespan(app: FastAPI):
     initialize_database()
     with db_connection() as conn:
         create_schema(conn)
+
+    # Sanitize legacy memory profiles to ensure no conversational fluff
+    try:
+        from backend.scripts.sanitize_memory_profiles import sanitize_database_memory_profiles
+        sanitize_database_memory_profiles()
+    except Exception as e:
+        logger.warning(f"Startup memory profile sanitization notice: {e}")
         
     logger.info("Preloading embedding models...")
     get_embedding_provider()

@@ -15,7 +15,9 @@ import os
 from backend.repositories.sqlite.document_repository import DocumentRepository
 from backend.repositories.sqlite.chunk_repository import ChunkRepository
 from backend.repositories.sqlite.workspace_repository import WorkspaceRepository
+from backend.repositories.sqlite.figure_repository import FigureRepository
 from backend.services.document.storage_service import StorageService
+from backend.services.document.figure_storage_service import FigureStorageService
 from backend.repositories.vector.vector_repository import VectorRepository
 from backend.core.exceptions.exceptions import DocumentNotFoundException
 
@@ -31,6 +33,8 @@ class DocumentDeletionService:
         self.workspace_repo = WorkspaceRepository()
         self.storage_service = StorageService()
         self.vector_repo = VectorRepository()
+        self.figure_repo = FigureRepository()
+        self.figure_storage = FigureStorageService()
 
     def delete_document(self, document_id: str) -> bool:
         """
@@ -96,6 +100,14 @@ class DocumentDeletionService:
                     self.workspace_repo.increment_chunk_count(workspace_id, -chunk_count)
             except Exception as e:
                 logger.warning(f"Failed to update workspace counters after deletion: {e}")
+
+        # Step 5: Visual RAG — delete figure metadata and PNG files
+        try:
+            self.figure_repo.delete_figures_by_document(document_id)
+            self.figure_storage.delete_document_figures(workspace_id, document_id)
+            logger.info(f"Deleted figure assets for document: {document_id}")
+        except Exception as e:
+            logger.warning(f"Figure cleanup failed for document {document_id}: {e}")
 
         logger.info(f"Document deletion complete: {document_id} (workspace={workspace_id}, chunks={chunk_count})")
         return deleted

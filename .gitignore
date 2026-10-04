@@ -2,7 +2,11 @@
 # .gitignore - CATALYST Document Intelligence Platform
 # ==============================================================================
 
-# 1. Environment & Secrets (NEVER commit live keys)
+# 1. Private Local Documentation (Personal use only)
+docs/
+*.md.local
+
+# 2. Environment & Secrets (NEVER commit live keys)
 .env
 .env.*
 !.env.example
@@ -15,7 +19,7 @@ frontend/.env.local
 frontend/.env.*.local
 !frontend/.env.example
 
-# 2. Python & Backend
+# 3. Python & Backend
 __pycache__/
 *.py[cod]
 *$py.class
@@ -33,7 +37,7 @@ build/
 backend/logs/*.log
 !backend/logs/.gitkeep
 
-# 3. Node.js & Frontend (Next.js)
+# 4. Node.js & Frontend (Next.js)
 node_modules/
 frontend/node_modules/
 .next/
@@ -49,14 +53,17 @@ yarn-error.log*
 .vercel/
 frontend/.vercel/
 
-# 4. Storage & Large Artifacts (Models downloaded via scripts/download_models.py)
+# 5. Storage & Large Artifacts
 storage/
+artifacts/
 *.sqlite
 *.sqlite3
 *.db
+*.db-wal
+*.db-shm
 faiss_index/
 
-# 5. OS & IDE Configuration
+# 6. OS & IDE Configuration
 .DS_Store
 Thumbs.db
 ehthumbs.db
@@ -65,10 +72,11 @@ ehthumbs.db
 *.swp
 *.swo
 
-# 6. AI Agent Memory & Caches
+# 7. AI Agent Memory & Caches
 .agents/
 graphify-out/
 .gemini/
 CLAUDE.md
 frontend/CLAUDE.md
 frontend/AGENTS.md
+.last-run.json

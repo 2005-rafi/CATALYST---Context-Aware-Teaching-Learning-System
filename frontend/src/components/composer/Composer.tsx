@@ -40,10 +40,10 @@ export const Composer: React.FC<ComposerProps> = ({
   };
 
   return (
-    <div className="p-4 sm:p-6 bg-background/80 backdrop-blur-md border-t border-outline-variant/60">
-      <div className="max-w-3xl mx-auto flex flex-col gap-2">
+    <div className="p-4 sm:p-5 md:px-10 lg:px-14 xl:px-16 bg-background/80 backdrop-blur-md border-t border-outline-variant/60">
+      <div className="w-full flex flex-col gap-2">
         {/* Composer Card Container */}
-        <div className="relative flex flex-col rounded-2xl border border-outline-variant bg-surface-container-low p-3 shadow-sm transition-all focus-within:border-outline focus-within:ring-1 focus-within:ring-outline/50">
+        <div className="relative flex flex-col rounded-2xl border border-outline-variant bg-surface-container-low p-3.5 shadow-sm transition-all focus-within:border-outline focus-within:ring-1 focus-within:ring-outline/50">
           {/* Multiline Auto-expanding Input */}
           <Textarea
             ref={textareaRef}
@@ -52,8 +52,8 @@ export const Composer: React.FC<ComposerProps> = ({
             onKeyDown={handleKeyDown}
             disabled={disabled || isGenerating}
             placeholder={placeholder}
-            maxHeight={200}
-            className="px-2 py-1 text-sm sm:text-base"
+            maxHeight={220}
+            className="px-2 py-1 text-sm sm:text-base leading-relaxed"
           />
 
           {/* Bottom Toolbar */}
@@ -65,7 +65,7 @@ export const Composer: React.FC<ComposerProps> = ({
                   key={m}
                   type="button"
                   onClick={() => setMode(m)}
-                  className={`px-2.5 py-1 text-[11px] font-medium rounded-md capitalize transition-all select-none ${
+                  className={`px-3 py-1 text-xs font-medium rounded-md capitalize transition-all select-none ${
                     mode === m
                       ? 'bg-primary-container text-on-primary-container shadow-xs font-semibold'
                       : 'text-on-surface-variant hover:text-on-surface'

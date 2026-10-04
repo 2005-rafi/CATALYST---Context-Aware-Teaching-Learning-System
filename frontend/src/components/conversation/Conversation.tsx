@@ -51,11 +51,11 @@ export const Conversation: React.FC<ConversationProps> = ({
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-2 scroll-smooth"
+        className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 md:px-10 lg:px-14 xl:px-16 py-6 space-y-4 scroll-smooth"
       >
-        <div className="max-w-3xl mx-auto w-full">
+        <div className="w-full min-w-0">
           {children}
-          <div ref={bottomRef} className="h-4" />
+          <div ref={bottomRef} className="h-6" />
         </div>
       </div>
 

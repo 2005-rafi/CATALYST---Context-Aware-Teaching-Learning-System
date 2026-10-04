@@ -1,109 +1,65 @@
-import uuid
-import datetime
-import time
-from backend.services.memory.context_builder import ContextBuilder
-from backend.services.memory.summarization_service import SummarizationService
-from backend.repositories.sqlite.workspace_summary_repository import WorkspaceSummaryRepository
-from backend.services.llm.response_formatter import ResponseFormatter
-from backend.services.llm.prompt_builder import PromptBuilder
-from backend.services.llm.failover_manager import FailoverManager
-from backend.repositories.sqlite.conversation_repository import ConversationRepository
-from backend.services.analytics.analytics_service import AnalyticsService
 import logging
-
 from backend.repositories.sqlite.workspace_repository import WorkspaceRepository
 from backend.core.exceptions.exceptions import WorkspaceNotFoundException
-
-from backend.services.agents.retrieval_orchestrator_agent import RetrievalOrchestratorAgent
-from backend.services.agents.pedagogical_synthesis_agent import PedagogicalSynthesisAgent
-
-logger = logging.getLogger(__name__)
+from backend.services.agents.master_orchestrator_agent import MasterOrchestratorAgent
+from backend.services.memory.conversation_intelligence_manager import ConversationIntelligenceManager
 from backend.core.config.settings import get_settings
 
+logger = logging.getLogger(__name__)
+
+
 class ChatService:
+    """
+    Application Chat Service.
+    Acts as the entry boundary for chat operations, delegating pure orchestration,
+    supervised retry/failover, and cognitive knowledge tracking to the MasterOrchestratorAgent (Agent 3).
+    """
     def __init__(self):
         self.workspace_repo = WorkspaceRepository()
-        self.retrieval_agent = RetrievalOrchestratorAgent()
-        self.synthesis_agent = PedagogicalSynthesisAgent()
-        
-        self.summarization_service = SummarizationService()
-        self.summary_repo = WorkspaceSummaryRepository()
-        self.conversation_repo = ConversationRepository()
-        self.analytics_service = AnalyticsService()
+        self.master_orchestrator = MasterOrchestratorAgent()
+        self.ci_manager = ConversationIntelligenceManager()
         self.settings = get_settings()
 
-    def chat(self, workspace_id: str, query: str, model_type: str = "medium") -> tuple[dict, list[dict]]:
+    def chat(
+        self,
+        workspace_id: str,
+        query: str,
+        model_type: str = "medium",
+        session_id: str | None = None
+    ) -> tuple[dict, list[dict]]:
         if not self.workspace_repo.workspace_exists(workspace_id):
             raise WorkspaceNotFoundException(f"Workspace '{workspace_id}' not found.")
-            
-        start_time = time.time()
-        logger.info("Query received", extra={"workspace_id": workspace_id, "query_length": len(query), "model_type": model_type})
-        
-        # 1. Agent 1: Research & Retrieval Orchestration
-        context = self.retrieval_agent.orchestrate(workspace_id, query, mode=model_type)
-        
-        retrieval_time_ms = int((time.time() - start_time) * 1000)
-        logger.info("Context orchestrated", extra={
-            "workspace_id": workspace_id, 
-            "retrieved_chunks": len(context.retrieved_chunks), 
-            "confidence": context.confidence.level, 
-            "duration_ms": retrieval_time_ms
-        })
-        
-        # 2. Agent 2: Pedagogical Synthesis & Content Architect
-        response_text, actual_model, _ = self.synthesis_agent.synthesize(context, mode=model_type)
-            
-        processing_time_ms = int((time.time() - start_time) * 1000)
-        logger.info("Agentic synthesis completed", extra={"workspace_id": workspace_id, "model_used": actual_model, "response_length": len(response_text), "duration_ms": processing_time_ms})
-        
-        # 3. Save to Conversation History
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        user_msg_id = str(uuid.uuid4())
-        asst_msg_id = str(uuid.uuid4())
-        
-        try:
-            self.conversation_repo.save_message(
-                message_id=user_msg_id,
-                workspace_id=workspace_id,
-                role="user",
-                message=query,
-                created_at=now,
-                model_used=None,
-                retrieval_chunks=0
-            )
-            asst_msg = self.conversation_repo.save_message(
-                message_id=asst_msg_id,
-                workspace_id=workspace_id,
-                role="assistant",
-                message=response_text,
-                created_at=now,
-                model_used=actual_model,
-                retrieval_chunks=len(context.retrieved_chunks)
-            )
-            asst_msg["processing_time_ms"] = processing_time_ms
-        except Exception as e:
-            logger.warning(f"Could not persist conversation history (workspace may have been deleted concurrently): {e}")
-            asst_msg = {
-                "message_id": asst_msg_id,
-                "workspace_id": workspace_id,
-                "role": "assistant",
-                "message": response_text,
-                "created_at": now,
-                "model_used": actual_model,
-                "retrieval_chunks": len(context.retrieved_chunks),
-                "processing_time_ms": processing_time_ms
-            }
-        
-        # 4. Trigger Summarization (Background check)
-        if self.summarization_service.should_summarize(workspace_id):
-            summary = self.summarization_service.generate_summary(workspace_id)
-            if summary:
-                self.summary_repo.upsert_summary(workspace_id, summary)
-        
-        # 5. Update Analytics
-        self.analytics_service.record_query(workspace_id, actual_model)
-        
-        # Format chunks for API return
-        chunks_for_api = [c.model_dump() for c in context.retrieved_chunks]
-        
-        return asst_msg, chunks_for_api
+
+        # Resolve or auto-create active session if session_id not specified
+        if not session_id:
+            try:
+                active_session = self.ci_manager.session_manager.get_or_create_active_session(workspace_id)
+                session_id = active_session.get("session_id")
+            except Exception as e:
+                logger.warning(f"Could not resolve active session for workspace {workspace_id}: {e}")
+
+        # Delegate execution to Agent 3: Master Orchestrator Agent
+        return self.master_orchestrator.orchestrate_chat(
+            workspace_id=workspace_id,
+            query=query,
+            mode=model_type,
+            session_id=session_id
+        )
+
+    def chat_stream(
+        self,
+        workspace_id: str,
+        query: str,
+        model_type: str = "medium",
+        session_id: str | None = None
+    ):
+        if not self.workspace_repo.workspace_exists(workspace_id):
+            raise WorkspaceNotFoundException(f"Workspace '{workspace_id}' not found.")
+
+        return self.master_orchestrator.orchestrate_stream(
+            workspace_id=workspace_id,
+            query=query,
+            mode=model_type,
+            session_id=session_id
+        )
+

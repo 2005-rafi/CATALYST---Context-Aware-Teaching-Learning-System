@@ -2,7 +2,7 @@ import numpy as np
 import faiss
 from backend.repositories.vector.faiss_manager import FAISSManager
 from backend.repositories.sqlite.chunk_repository import ChunkRepository
-from backend.services.retrieval.base_retriever import BaseRetriever
+from backend.repositories.base_retriever import BaseRetriever
 
 class VectorRepository(BaseRetriever):
     def __init__(self):

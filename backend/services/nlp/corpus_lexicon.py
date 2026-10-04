@@ -46,15 +46,16 @@ class CorpusLexicon:
     def extract_words_from_chunks(self, chunks: List[Dict[str, Any]]) -> List[str]:
         """
         Extracts cleaned unique domain words from a list of chunk dicts.
+        Uses word-boundary extraction to avoid broken sub-tokens.
         """
+        import re
         vocab_set: Set[str] = set()
         for chunk in chunks:
             text = chunk.get("chunk_text", "")
-            for word in text.split():
-                clean_word = "".join(c for c in word if c.isalnum()).lower()
-                # Store words with 3+ characters to avoid single letter noise
-                if len(clean_word) >= 3 and not clean_word.isdigit():
-                    vocab_set.add(clean_word)
+            # Extract whole alphabetic words with 4+ characters
+            words = re.findall(r'\b[a-zA-Z]{4,}\b', text.lower())
+            for w in words:
+                vocab_set.add(w)
 
         return sorted(list(vocab_set))
 

@@ -1,7 +1,7 @@
 import traceback
 import logging
 from backend.repositories.sqlite.conversation_repository import ConversationRepository
-from backend.providers.groq.groq_provider import GroqProvider
+from backend.providers.llm.groq_provider import GroqProvider
 from backend.core.config.settings import get_settings
 
 logger = logging.getLogger(__name__)

@@ -46,33 +46,17 @@ class ResponseFormatter:
             # Detect table separator line e.g. |---|---|---|
             if re.match(r'^\|[\s:\-\|]+\|$', stripped):
                 in_table = True
-                if current_row:
-                    sanitized_lines.append(" | ".join(current_row) + " |")
-                    current_row = []
                 sanitized_lines.append(stripped)
                 continue
 
-            if in_table and stripped.startswith('|') and stripped.endswith('|'):
-                sanitized_lines.append(stripped)
-                continue
-            elif in_table and (stripped.startswith('•') or stripped.startswith('-')) and sanitized_lines:
-                # Stray bullet point that belongs to the previous table cell
-                prev = sanitized_lines.pop()
-                if prev.endswith('|'):
-                    # Insert before the last pipe or citation column
-                    parts = [p.strip() for p in prev.split('|')[1:-1]]
-                    if len(parts) >= 2:
-                        # Append to content cell before citation
-                        target_col = -2 if len(parts) >= 3 and parts[-1].startswith('[') else -1
-                        parts[target_col] += f" <br /> {stripped}"
-                        sanitized_lines.append("| " + " | ".join(parts) + " |")
-                    else:
-                        sanitized_lines.append(prev[:-1] + f" <br /> {stripped} |")
+            if in_table:
+                # If line is a valid table row, keep it
+                if stripped.startswith('|') and stripped.endswith('|'):
+                    sanitized_lines.append(stripped)
+                    continue
                 else:
-                    sanitized_lines.append(prev + f" <br /> {stripped} |")
-                continue
-            elif in_table and stripped == '':
-                in_table = False
+                    # Table has ended
+                    in_table = False
 
             sanitized_lines.append(line)
 
@@ -82,5 +66,11 @@ class ResponseFormatter:
         if not sources:
             return response_text
             
+        # If the response explicitly denotes out-of-box content or does not cite [1], do not attach sources
+        if "content not from uploaded content" in response_text.lower():
+            return response_text
+        if not re.search(r'\[\d+\]', response_text):
+            return response_text
+
         sources_text = self.source_attributor.format_sources_text(sources)
         return response_text + "\n\n---\n\n" + sources_text

@@ -1,0 +1,6 @@
+"""
+API Layer for CATALYST RAG Application.
+"""
+from backend.api.v1.api_router import api_router
+
+__all__ = ["api_router"]

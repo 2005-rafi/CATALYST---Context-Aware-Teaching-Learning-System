@@ -33,13 +33,13 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ language = 'text', code })
         >
           {copied ? (
             <>
-              <Check className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="text-[11px] text-emerald-500 font-medium">Copied!</span>
+              <Check className="w-3.5 h-3.5 text-primary" />
+              <span className="text-[11px] text-primary font-semibold">Copied!</span>
             </>
           ) : (
             <>
-              <Copy className="w-3.5 h-3.5" />
-              <span className="text-[11px]">Copy</span>
+              <Copy className="w-3.5 h-3.5 text-on-surface-variant" />
+              <span className="text-[11px] text-on-surface-variant font-medium">Copy</span>
             </>
           )}
         </button>

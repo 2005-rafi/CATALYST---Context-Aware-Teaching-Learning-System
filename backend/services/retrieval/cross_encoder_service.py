@@ -33,6 +33,25 @@ class CrossEncoderService:
         
         # Build dict for quick lookup
         chunk_dict = {c["chunk_id"]: c for c in chunks_data}
+
+        # Visual RAG: Also fetch figure chunks in candidates
+        missing_ids = [cid for cid in chunk_ids if cid not in chunk_dict]
+        if missing_ids:
+            try:
+                from backend.repositories.sqlite.figure_repository import FigureRepository
+                fig_repo = FigureRepository()
+                figs_data = fig_repo.get_figures_by_ids(missing_ids)
+                for fig in figs_data:
+                    caption = fig.get("caption_text") or fig.get("context_text") or "Figure"
+                    chunk_dict[fig["figure_id"]] = {
+                        "chunk_id": fig["figure_id"],
+                        "document_id": fig["document_id"],
+                        "chunk_text": f"[Figure p.{fig.get('page_number', 1)}] {caption}",
+                        "page_number": fig.get("page_number", 1),
+                        "section_heading": f"Figure {fig.get('figure_type', '')}",
+                    }
+            except Exception:
+                pass
         
         texts_to_score = []
         valid_candidates = []

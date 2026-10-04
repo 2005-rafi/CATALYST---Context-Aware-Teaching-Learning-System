@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useParams } from 'next/navigation';
-import { getWorkspace, WorkspaceResult } from '@/lib/api';
 import { WorkspaceNav } from '@/components/layout/WorkspaceNav';
+import { useWorkspaceSession } from '@/components/providers/WorkspaceSessionProvider';
 
 export default function WorkspaceLayout({
   children,
@@ -12,31 +12,16 @@ export default function WorkspaceLayout({
 }) {
   const params = useParams();
   const workspaceId = params.id as string;
-  const [workspace, setWorkspace] = useState<WorkspaceResult | null>(null);
-
-  useEffect(() => {
-    let isCancelled = false;
-    async function fetchWS() {
-      try {
-        const ws = await getWorkspace(workspaceId);
-        if (!isCancelled) {
-          setWorkspace(ws);
-        }
-      } catch (err: unknown) {
-        console.warn('Failed to fetch workspace detail:', err);
-      }
-    }
-    if (workspaceId) void fetchWS();
-    return () => {
-      isCancelled = true;
-    };
-  }, [workspaceId]);
+  const sessionContext = useWorkspaceSession();
+  const workspace = sessionContext?.workspace;
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden bg-background">
       <WorkspaceNav
         workspaceId={workspaceId}
         workspaceName={workspace?.workspace_name}
+        totalDocs={workspace?.total_documents}
+        totalChunks={workspace?.total_chunks}
       />
       <div className="flex-1 overflow-hidden relative flex flex-col">
         {children}

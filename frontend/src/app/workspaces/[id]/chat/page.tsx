@@ -1,19 +1,22 @@
 'use client';
 
-import React, { useState, useEffect, useRef, use } from 'react';
-import { Sparkles, MessageSquare, AlertCircle } from 'lucide-react';
-import { getChatHistory, sendMessage, APIError } from '@/lib/api';
-import { Conversation, MessageItem, SourceItem } from '@/components/conversation';
+import React, { useState, useEffect, use, useCallback } from 'react';
+import { Sparkles } from 'lucide-react';
+import { getChatHistory, sendMessage, APIError } from '@/services/api';
+import { FigureReference, ChatSource } from '@/types';
+import { Conversation, MessageItem, MessageSkeleton } from '@/components/conversation';
 import { Composer } from '@/components/composer/Composer';
 import { AgentStateIndicator, AgentState } from '@/components/agent/AgentStateIndicator';
-import { Spinner, Button } from '@/components/primitives';
+import { Spinner } from '@/components/primitives';
+import { useWorkspaceSession } from '@/components/providers/WorkspaceSessionProvider';
 
 interface Message {
   id?: string;
   role: 'user' | 'assistant' | 'system';
   message: string;
   model_used?: string;
-  sources?: SourceItem[];
+  sources?: ChatSource[];
+  figures?: FigureReference[];
   created_at?: string;
   is_error?: boolean;
 }
@@ -22,50 +25,52 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const unwrappedParams = use(params);
   const workspaceId = unwrappedParams.id;
 
+  const sessionContext = useWorkspaceSession();
+  const activeSessionId = sessionContext?.activeSessionId ?? null;
+  const refreshSessions = sessionContext?.refreshSessions ?? (async () => {});
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [agentState, setAgentState] = useState<AgentState>('idle');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const [newestAssistantId, setNewestAssistantId] = useState<string | null>(null);
 
-  // Fetch chat history on mount
-  useEffect(() => {
-    let isCancelled = false;
-    const fetchHistory = async () => {
-      try {
-        const history = await getChatHistory(workspaceId);
-        if (!isCancelled) {
-          const parsed = (history || []).map((h) => ({
-            id: h.id,
-            role: (h.role as 'user' | 'assistant' | 'system') || 'assistant',
-            message: h.message,
-            model_used: h.model_used,
-            created_at: h.created_at,
-          }));
-          setMessages(parsed);
-        }
-      } catch (err: unknown) {
-        console.warn('Failed to load chat history:', err);
-      } finally {
-        if (!isCancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void fetchHistory();
-    return () => {
-      isCancelled = true;
-    };
+  // Fetch chat history for the active session
+  const fetchHistory = useCallback(async (sessionId?: string | null) => {
+    setLoading(true);
+    setNewestAssistantId(null);
+    try {
+      const history = await getChatHistory(workspaceId, sessionId || undefined);
+      const parsed: Message[] = (history || []).map((h) => ({
+        id: h.message_id || h.id,
+        role: (h.role as 'user' | 'assistant' | 'system') || 'assistant',
+        message: h.message,
+        model_used: h.model_used,
+        created_at: h.created_at,
+        sources: h.sources,
+        figures: h.figures || [],
+      }));
+      setMessages(parsed);
+    } catch (err: unknown) {
+      console.warn('Failed to load chat history:', err);
+      setMessages([]);
+    } finally {
+      setLoading(false);
+    }
   }, [workspaceId]);
 
-  const handleSend = async (query: string, mode: string) => {
-    if (!query.trim()) return;
+  // Load history whenever active session changes
+  useEffect(() => {
+    void fetchHistory(activeSessionId);
+  }, [activeSessionId, fetchHistory]);
 
-    setErrorMessage(null);
+  const handleSendMessage = async (text: string, mode: string = 'medium') => {
+    if (!text.trim()) return;
+
+    const tempId = `temp-${Date.now()}`;
     const userMsg: Message = {
+      id: tempId,
       role: 'user',
-      message: query,
+      message: text,
       created_at: new Date().toISOString(),
     };
 
@@ -73,110 +78,121 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setAgentState('searching');
 
     try {
-      // Simulate progressive agent phases for smooth UX feedback
-      const timer = setTimeout(() => {
-        setAgentState('generating');
-      }, 700);
+      // Step: Ingesting/Retrieving context
+      setTimeout(() => {
+        setAgentState((curr) => (curr === 'searching' ? 'generating' : curr));
+      }, 400);
 
-      const data = await sendMessage(workspaceId, query, mode);
-      clearTimeout(timer);
+      const res = await sendMessage(workspaceId, text, mode, activeSessionId || undefined);
 
-      const sourcesList: SourceItem[] = (data.sources || []).map((s: any) => ({
-        file_name: s.source_file || s.file_name,
-        chunk_count: s.chunk_count,
-        score: s.score,
-      }));
-
+      const assistantMsgId = res.message_id || `resp-${Date.now()}`;
       const assistantMsg: Message = {
+        id: assistantMsgId,
         role: 'assistant',
-        message: data.response,
-        model_used: data.model_used,
-        sources: sourcesList,
+        message: res.response,
+        model_used: res.model_used,
+        sources: res.sources,
+        figures: res.figures || [],
         created_at: new Date().toISOString(),
       };
 
+      setNewestAssistantId(assistantMsgId);
       setMessages((prev) => [...prev, assistantMsg]);
-      setAgentState('idle');
+
+      // If this query generated or modified a session, refresh sidebar list
+      if (res.session_id && res.session_id !== activeSessionId) {
+        sessionContext?.selectSession(res.session_id);
+      }
+      await refreshSessions();
     } catch (err: unknown) {
-      setAgentState('idle');
-      const detail =
-        err instanceof APIError
-          ? err.message
-          : err instanceof Error
-          ? err.message
-          : 'Unable to reach intelligence server.';
+      let errMsg = 'Failed to generate response. Please check backend connectivity.';
+      if (err instanceof APIError) {
+        errMsg = err.message;
+      } else if (err instanceof Error) {
+        errMsg = err.message;
+      }
 
       const errorMsg: Message = {
+        id: `err-${Date.now()}`,
         role: 'assistant',
-        message: `An error occurred while retrieving answer:\n\n> ${detail}`,
-        created_at: new Date().toISOString(),
+        message: errMsg,
         is_error: true,
+        created_at: new Date().toISOString(),
       };
-
       setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setAgentState('idle');
     }
   };
 
-  const handleStop = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+  const handleStopGeneration = () => {
     setAgentState('idle');
   };
 
-  const handleRegenerate = () => {
-    const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
-    if (lastUserMsg) {
-      void handleSend(lastUserMsg.message, 'medium');
-    }
-  };
-
   return (
-    <div className="flex flex-col h-full bg-background relative overflow-hidden">
-      {/* Top Subtle Agent Activity Feedback */}
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-        <AgentStateIndicator state={agentState} />
-      </div>
-
-      {/* Main Conversation Feed */}
-      <Conversation isStreaming={agentState === 'generating'}>
+    <div className="flex-1 flex flex-col h-full min-h-0 bg-surface-container-lowest relative overflow-hidden">
+      {/* 1. Main Chat Messages Feed */}
+      <div className="flex-1 overflow-y-auto min-h-0 relative flex flex-col">
         {loading ? (
-          <div className="h-64 flex flex-col items-center justify-center gap-3">
+          <div className="flex-1 flex flex-col items-center justify-center gap-3">
             <Spinner size="lg" />
-            <p className="text-xs text-on-surface-variant">Loading workspace messages...</p>
+            <p className="text-xs text-on-surface-variant font-medium">
+              Loading grounded conversation history...
+            </p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="h-full min-h-[380px] flex flex-col items-center justify-center text-center p-8 select-none">
-            <div className="w-12 h-12 rounded-2xl bg-primary-container text-on-primary-container flex items-center justify-center mb-4 shadow-sm">
-              <Sparkles className="w-6 h-6 text-primary" />
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-lg mx-auto">
+            <div className="w-12 h-12 rounded-2xl bg-primary-container text-primary flex items-center justify-center shadow-xs mb-4">
+              <Sparkles className="w-6 h-6" />
             </div>
-            <h2 className="text-base font-semibold text-on-surface">Intelligence Ready</h2>
-            <p className="text-xs text-on-surface-variant max-w-sm mt-1.5 leading-relaxed">
-              Ask anything about your uploaded documents. CATALYST retrieves grounded passages via hybrid vector and lexical search to formulate verified answers.
+            <h2 className="text-base font-bold text-on-surface tracking-tight">
+              Grounded Learning Assistant
+            </h2>
+            <p className="text-xs text-on-surface-variant mt-1.5 leading-relaxed">
+              Ask anything from your uploaded documents. CATALYST retrieves contextually grounded chunks and multimodal figures to synthesize answers.
             </p>
           </div>
         ) : (
-          messages.map((msg, idx) => (
-            <MessageItem
-              key={msg.id || idx}
-              role={msg.role}
-              content={msg.message}
-              modelUsed={msg.model_used}
-              sources={msg.sources}
-              timestamp={msg.created_at}
-              isError={msg.is_error}
-              onRegenerate={idx === messages.length - 1 && msg.role === 'assistant' ? handleRegenerate : undefined}
-            />
-          ))
+          <Conversation>
+            {messages.map((msg) => (
+              <MessageItem
+                key={msg.id || msg.created_at}
+                id={msg.id}
+                role={msg.role}
+                content={msg.message}
+                sources={msg.sources}
+                figures={msg.figures}
+                modelUsed={msg.model_used}
+                timestamp={msg.created_at}
+                isError={msg.is_error}
+                workspaceId={workspaceId}
+                isNewMessage={msg.id === newestAssistantId}
+              />
+            ))}
+            {agentState !== 'idle' && (
+              <MessageSkeleton state={agentState} />
+            )}
+          </Conversation>
         )}
-      </Conversation>
+      </div>
 
-      {/* Composer Input Area */}
-      <Composer
-        onSend={handleSend}
-        onStop={handleStop}
-        isGenerating={agentState !== 'idle'}
-      />
+      {/* 2. Floating Agent State Indicator */}
+      {agentState !== 'idle' && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30">
+          <AgentStateIndicator state={agentState} />
+        </div>
+      )}
+
+      {/* 3. Anchored Bottom Composer */}
+      <div className="flex-shrink-0 w-full">
+        <Composer
+          onSend={handleSendMessage}
+          onStop={handleStopGeneration}
+          isGenerating={agentState !== 'idle'}
+          disabled={agentState !== 'idle'}
+          placeholder="Ask a question about your knowledge base documents..."
+        />
+      </div>
     </div>
   );
 }

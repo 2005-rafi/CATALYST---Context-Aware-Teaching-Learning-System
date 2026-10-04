@@ -29,8 +29,8 @@ def test_mode_selector_and_simple_mode_chat():
         page = browser.new_page()
         page.goto(FRONTEND_URL, wait_until="networkidle")
         
-        # Navigate to Biology-12th standard workspace
-        bio_heading = page.get_by_role("heading", name="Biology-12th standard")
+        # Navigate to Biology workspace
+        bio_heading = page.get_by_role("heading", name=re.compile(r"Biology")).first
         expect(bio_heading).to_be_visible()
         bio_heading.click()
         
@@ -73,7 +73,7 @@ def test_in_domain_spelling_mistakes_retrieval_and_answer():
         page.goto(FRONTEND_URL, wait_until="networkidle")
         
         # Open Biology workspace
-        page.get_by_role("heading", name="Biology-12th standard").click()
+        page.get_by_role("heading", name=re.compile(r"Biology")).first.click()
         page.wait_for_url("**/workspaces/**/chat", timeout=8000)
         
         # Select Medium mode
@@ -86,10 +86,14 @@ def test_in_domain_spelling_mistakes_retrieval_and_answer():
         # In-domain query with severe typos: 'preventaion', 'pollutoin'
         test_query = "List all environmental issues and the preventaion to them?"
         chat_input.fill(test_query)
-        chat_input.press("Enter")
+        send_btn = page.locator("button[aria-label='Send prompt']").first
+        if send_btn.is_visible():
+            send_btn.click()
+        else:
+            chat_input.press("Enter")
         
         # Wait for pedagogical response
-        page.wait_for_timeout(10000)
+        page.locator(".prose").last.wait_for(state="visible", timeout=30000)
         
         # Verify answer rendered with pedagogical structure or pollution keywords
         page_text = page.content()
@@ -104,7 +108,7 @@ def test_out_of_domain_physics_query_handling():
         page.goto(FRONTEND_URL, wait_until="networkidle")
         
         # Open Biology workspace
-        page.get_by_role("heading", name="Biology-12th standard").click()
+        page.get_by_role("heading", name=re.compile(r"Biology")).first.click()
         page.wait_for_url("**/workspaces/**/chat", timeout=8000)
         
         # Select Medium mode
@@ -117,11 +121,15 @@ def test_out_of_domain_physics_query_handling():
         # Out-of-domain Physics query with typo ('motin' -> motion, 'Newtn' -> Newton)
         physics_query = "What is Newtn second law of motin?"
         chat_input.fill(physics_query)
-        chat_input.press("Enter")
+        send_btn = page.locator("button[aria-label='Send prompt']").first
+        if send_btn.is_visible():
+            send_btn.click()
+        else:
+            chat_input.press("Enter")
         
-        page.wait_for_timeout(10000)
+        # Wait for model generated physics explanation without crashing
+        page.locator(".prose").last.wait_for(state="visible", timeout=30000)
         
-        # Verify model generated physics explanation without crashing
         page_text = page.content()
         assert "Newton" in page_text or "Force" in page_text or "acceleration" in page_text or "motion" in page_text
         assert "String should match pattern" not in page_text

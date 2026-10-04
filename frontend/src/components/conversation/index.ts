@@ -5,3 +5,5 @@ export * from './MessageContent';
 export * from './MessageActions';
 export * from './MessageItem';
 export * from './Conversation';
+export * from './FigureCard';
+export * from './MessageSkeleton';

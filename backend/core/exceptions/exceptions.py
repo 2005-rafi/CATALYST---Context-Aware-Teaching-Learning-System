@@ -39,3 +39,23 @@ class GroqUnavailableException(AppException):
 class QwenUnavailableException(AppException):
     def __init__(self, detail: str = "Local Qwen API is unavailable"):
         super().__init__(detail, status_code=503)
+
+class EmbeddingGenerationException(AppException):
+    def __init__(self, detail: str = "Embedding generation failed"):
+        super().__init__(detail, status_code=500)
+
+class VectorIndexException(AppException):
+    def __init__(self, detail: str = "Vector index operation failed"):
+        super().__init__(detail, status_code=500)
+
+class InferenceException(AppException):
+    def __init__(self, detail: str = "Inference execution failed"):
+        super().__init__(detail, status_code=500)
+
+class ContextLengthExceededException(AppException):
+    def __init__(self, detail: str = "Context length exceeded maximum limit"):
+        super().__init__(detail, status_code=400)
+
+class DatabaseException(AppException):
+    def __init__(self, detail: str = "Database operation failed"):
+        super().__init__(detail, status_code=500)

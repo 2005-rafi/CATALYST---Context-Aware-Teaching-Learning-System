@@ -1,7 +1,7 @@
 import re
 from typing import List, Tuple
 from backend.repositories.sqlite.base_repository import BaseRepository
-from backend.services.retrieval.base_retriever import BaseRetriever
+from backend.repositories.base_retriever import BaseRetriever
 
 class BM25Repository(BaseRepository, BaseRetriever):
     _instance = None

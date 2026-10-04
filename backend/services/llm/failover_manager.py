@@ -1,6 +1,5 @@
 import logging
-from backend.providers.groq.groq_provider import GroqProvider
-from backend.providers.qwen.qwen_provider import QwenProvider
+from backend.providers import GroqProvider, QwenProvider
 from backend.core.exceptions.exceptions import GroqUnavailableException, QwenUnavailableException
 from backend.core.config.settings import get_settings
 

@@ -1,9 +1,10 @@
+# Render.com Blueprint Configuration for CATALYST FastAPI Standalone Backend
 services:
   - type: web
     name: catalyst-rag-backend
     runtime: python
-    buildCommand: pip install -r requirements.txt && python scripts/download_models.py
-    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
@@ -11,11 +12,18 @@ services:
         value: production
       - key: LOG_LEVEL
         value: INFO
-      - key: MODELS_CACHE_PATH
-        value: storage/models
       - key: OFFLINE_MODE
-        value: "true"
+        value: "false"
       - key: ALLOWED_ORIGINS
-        value: "http://localhost:3000"
+        value: "*"
+      - key: EMBEDDING_MODEL
+        value: "sentence-transformers/all-MiniLM-L6-v2"
+      - key: CROSS_ENCODER_MODEL
+        value: "cross-encoder/ms-marco-MiniLM-L-6-v2"
       - key: GROQ_API_KEY
-        sync: false
+        sync: false  # Must be populated in Render Dashboard Environment Settings
+      - key: HF_TOKEN
+        sync: false  # Optional: for HuggingFace rate limits
+    healthCheckPath: /api/v1/system/health
+    plan: free
+    autoDeploy: true

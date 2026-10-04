@@ -1,6 +1,4 @@
-from backend.providers.groq.groq_provider import GroqProvider
-from backend.providers.qwen.qwen_provider import QwenProvider
-from backend.providers.embeddings.embedding_provider import get_embedding_provider
+from backend.providers import GroqProvider, QwenProvider, get_embedding_provider
 from backend.repositories.sqlite.database import db_connection
 import logging
 

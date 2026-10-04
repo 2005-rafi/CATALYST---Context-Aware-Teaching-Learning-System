@@ -11,9 +11,12 @@ from typing import List, Dict, Any
 from backend.services.document.extractors.extractor_factory import ExtractorFactory
 from backend.services.document.text_cleaner import TextCleaner
 from backend.services.document.chunking.recursive_chunker import RecursiveChunker
+from backend.services.document.figure_storage_service import FigureStorageService
+from backend.services.document.extractors.figure_captioner import FigureCaptioner
 from backend.repositories.sqlite.document_repository import DocumentRepository
 from backend.repositories.sqlite.chunk_repository import ChunkRepository
 from backend.repositories.sqlite.workspace_repository import WorkspaceRepository
+from backend.repositories.sqlite.figure_repository import FigureRepository
 from backend.repositories.vector.vector_repository import VectorRepository
 from backend.repositories.bm25.bm25_repository import BM25Repository
 from backend.providers.embeddings.embedding_provider import get_embedding_provider
@@ -85,10 +88,12 @@ class ExtractorStage(IngestionStage):
         payload["page_boundaries"] = result.page_boundaries
         payload["headings"] = result.headings
         payload["file_path"] = file_path
-        
+        payload["figures"] = result.figures  # Visual RAG: extracted figure crops
+
         logger.info("Extraction completed", extra={
-            "document_id": payload["document_id"], 
-            "page_count": len(result.pages) if result.pages else 0
+            "document_id": payload["document_id"],
+            "page_count": len(result.pages) if result.pages else 0,
+            "figure_count": len(result.figures),
         })
         return payload
 
@@ -204,10 +209,176 @@ class LexicalIngestionStage(IngestionStage):
     async def execute(self, payload: dict) -> dict:
         workspace_id = payload["workspace_id"]
         document_id = payload["document_id"]
-        
+
         # Offload BM25 indexing tasks to background thread
         await asyncio.to_thread(self.bm25_repo.rebuild_index, workspace_id)
         logger.info("BM25 indexed", extra={"document_id": document_id, "workspace_id": workspace_id})
+        return payload
+
+
+class FigureExtractionStage(IngestionStage):
+    """
+    ST-4: Saves extracted figure PNGs to disk and creates figure_chunks DB records.
+    Non-blocking: pipeline continues even if storage fails for individual figures.
+    """
+    def __init__(self):
+        self.figure_storage = FigureStorageService()
+        self.figure_repo = FigureRepository()
+
+    async def execute(self, payload: dict) -> dict:
+        figures = payload.get("figures", [])
+        if not figures:
+            logger.info("[FigureExtractionStage] No figures found in document.")
+            return payload
+
+        workspace_id = payload["workspace_id"]
+        document_id = payload["document_id"]
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+        figure_records: List[dict] = []
+
+        for fig in figures:
+            if not fig.image_bytes:
+                continue
+
+            figure_id = str(uuid.uuid4())
+
+            # Save PNG to disk (offloaded to thread — blocking I/O)
+            file_path = await asyncio.to_thread(
+                self.figure_storage.save_figure,
+                workspace_id, document_id,
+                fig.page_number, fig.figure_index,
+                fig.image_bytes
+            )
+
+            if not file_path:
+                logger.warning(
+                    f"[FigureExtractionStage] Skipping figure p{fig.page_number}_{fig.figure_index}: save failed."
+                )
+                continue
+
+            # Attach figure_id back to the FigureContent for the captioning stage
+            fig.caption_text = fig.context_text  # temporary: context as placeholder caption
+
+            figure_records.append((
+                figure_id,
+                workspace_id,
+                document_id,
+                fig.page_number,
+                fig.figure_index,
+                file_path,
+                "",                  # caption_text — will be populated in CaptioningStage
+                fig.context_text,
+                fig.figure_type,
+                "",                  # embedding_ref
+                now,
+            ))
+
+            # Store figure_id on the FigureContent object so captioning stage can reference it
+            fig.figure_type = fig.figure_type  # keep existing
+            # Embed figure_id as attribute (dataclass is mutable)
+            object.__setattr__(fig, "_figure_id", figure_id) if False else setattr(fig, "_figure_id", figure_id)
+            setattr(fig, "_file_path", file_path)
+
+        if figure_records:
+            await asyncio.to_thread(self.figure_repo.create_figures_batch, figure_records)
+
+        logger.info(
+            f"[FigureExtractionStage] Saved {len(figure_records)} figures for doc {document_id}"
+        )
+        payload["figures"] = figures
+        return payload
+
+
+class FigureCaptioningStage(IngestionStage):
+    """
+    ST-6: Generates AI captions for each extracted figure using Groq Vision.
+    Embeds caption + context text into FAISS for semantic retrieval.
+    Non-blocking: captioning failures are logged and skipped.
+    """
+    def __init__(self, groq_api_key: str):
+        self.captioner = FigureCaptioner(groq_api_key)
+        self.figure_repo = FigureRepository()
+        self.embedding_provider = get_embedding_provider()
+        self.vector_repo = VectorRepository()
+
+    async def execute(self, payload: dict) -> dict:
+        figures = payload.get("figures", [])
+        workspace_id = payload["workspace_id"]
+        document_id = payload["document_id"]
+
+        captionable = [f for f in figures if hasattr(f, "_figure_id") and f.image_bytes]
+
+        if not captionable:
+            logger.info("[FigureCaptioningStage] No figures to caption.")
+            return payload
+
+        if not self.captioner.is_available:
+            logger.warning("[FigureCaptioningStage] Groq Vision unavailable. Skipping captioning.")
+            return payload
+
+        caption_texts: List[str] = []
+        caption_ids: List[str] = []
+        MAX_DEEP_AI_CAPTIONS = 8  # Deep LLM captions for top key figures; fast heuristic for the rest
+
+        for idx, fig in enumerate(captionable):
+            figure_id = getattr(fig, "_figure_id", None)
+            if not figure_id:
+                continue
+
+            try:
+                # Use deep AI captioning for first few figures; instant context-based for large batches
+                if idx < MAX_DEEP_AI_CAPTIONS and fig.context_text:
+                    result = await asyncio.to_thread(
+                        self.captioner.caption,
+                        fig.image_bytes,
+                        fig.context_text,
+                        fig.page_number,
+                    )
+                else:
+                    result = self.captioner._fallback_caption(fig.context_text, fig.page_number)
+
+                caption_text = result.get("caption_text", "")
+                figure_type = result.get("figure_type", "unknown")
+
+                # Update DB record with the caption
+                await asyncio.to_thread(
+                    self.figure_repo.update_caption,
+                    figure_id, caption_text, figure_type
+                )
+
+                # Prepare text for embedding: caption + context
+                embed_text = f"[Figure, Page {fig.page_number}] {caption_text}"
+                if fig.context_text:
+                    embed_text += f" Context: {fig.context_text[:200]}"
+
+                caption_texts.append(embed_text)
+                caption_ids.append(figure_id)  # Use figure_id as vector reference
+
+            except Exception as e:
+                logger.warning(f"[FigureCaptioningStage] Caption failed for {figure_id}: {e}")
+                continue
+
+        # Batch embed all captions into the same FAISS workspace index
+        if caption_texts:
+            try:
+                embeddings = await asyncio.to_thread(
+                    self.embedding_provider.embed_batch, caption_texts
+                )
+                self.vector_repo.add_vectors(workspace_id, caption_ids, embeddings)
+
+                # Update embedding_ref in DB
+                for fig_id in caption_ids:
+                    await asyncio.to_thread(
+                        self.figure_repo.update_embedding_ref, fig_id, fig_id
+                    )
+
+                logger.info(
+                    f"[FigureCaptioningStage] Embedded {len(caption_texts)} figure captions."
+                )
+            except Exception as e:
+                logger.error(f"[FigureCaptioningStage] Embedding failed: {e}")
+
         return payload
 
 # --- Ingestion Service Facade Orchestrator ---
@@ -219,15 +390,17 @@ class IngestionService:
         self.chunk_repo = ChunkRepository()
         self.workspace_repo = WorkspaceRepository()
         self.analytics_service = AnalyticsService()
-        
-        # Instantiate stages
+
+        # Instantiate stages — figure stages inserted after lexical indexing
         self.pipeline = PipelineProcessor([
             ExtractorStage(),
             SanitizerStage(),
             ChunkingStage(self.settings),
             SQLCacheStage(),
             VectorIngestionStage(),
-            LexicalIngestionStage()
+            LexicalIngestionStage(),
+            FigureExtractionStage(),
+            FigureCaptioningStage(groq_api_key=self.settings.GROQ_API_KEY),
         ])
 
     async def ingest_document(self, document_id: str, workspace_id: str) -> None:
