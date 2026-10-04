@@ -21,20 +21,19 @@ class HealthService:
     def check_embedding_model(self) -> dict:
         try:
             provider = get_embedding_provider()
-            if provider.model is not None:
-                dim = (
-                    provider.model.get_embedding_dimension()
-                    if hasattr(provider.model, "get_embedding_dimension")
-                    else provider.model.get_sentence_embedding_dimension()
-                )
+            if provider.is_loaded:
                 return {
                     "status": "ok", 
-                    "detail": f"Embedding model '{provider.model_name}' loaded ({dim}-dimensional)."
+                    "detail": f"Embedding model '{provider.model_name}' loaded in memory ({provider.dimension}-dim)."
                 }
-            return {"status": "error", "detail": "Embedding model not initialized in memory."}
+            return {
+                "status": "ok", 
+                "detail": f"Embedding model '{provider.model_name}' ready for lazy initialization ({provider.dimension}-dim)."
+            }
         except Exception as e:
             logger.error(f"Health check embedding error: {e}")
             return {"status": "error", "detail": str(e)}
+
 
     def check_groq(self) -> dict:
         return self.groq.get_diagnostics()

@@ -62,6 +62,7 @@ async def request_lifecycle_middleware(request: Request, call_next):
     return response
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def root_status():
     return {"status": "operational", "service": "RAG Document Intelligence API", "version": "1.0.0"}
+

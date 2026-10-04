@@ -18,8 +18,9 @@ class FAISSManager:
     def dimension(self) -> int:
         if self._dimension is None:
             from backend.providers.embeddings.embedding_provider import get_embedding_provider
-            self._dimension = get_embedding_provider().model.get_sentence_embedding_dimension()
+            self._dimension = get_embedding_provider().dimension
         return self._dimension
+
 
     def _get_index_path(self, workspace_id: str) -> str:
         return f"{self.settings.FAISS_PATH}/{workspace_id}.index"

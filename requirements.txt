@@ -32,14 +32,13 @@ pdfplumber==0.11.4
 python-docx==1.1.2
 pymupdf>=1.24.0
 
-# === NLP / ML — CPU-only ===
-# torch is pinned to CPU wheel via constraints.txt (see above)
-# sentence-transformers and transformers declare torch as a dep;
-# constraints.txt ensures pip never upgrades it to the CUDA build.
+# === NLP / ML — Ultra-Lightweight INT8 Quantized ONNX & CPU ML ===
+fastembed>=0.4.0
+onnxruntime>=1.18.0
 sentence-transformers==3.1.1
 transformers>=4.44.0,<4.48.0
 faiss-cpu>=1.9.0
-numpy>=1.26.4,<2.0.0
+numpy>=1.26.4
 scikit-learn>=1.5.1
 tiktoken>=0.7.0
 rapidfuzz>=3.9.0
