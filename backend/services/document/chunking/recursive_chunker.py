@@ -144,7 +144,7 @@ class RecursiveChunker:
                 current_chunk_text += split
                 current_token_count = self.token_counter.count(current_chunk_text)
                 
-        if current_chunk_text.strip() and current_token_count >= self.min_chunk_size:
+        if current_chunk_text.strip() and (current_token_count >= self.min_chunk_size or len(chunks) == 0):
             start_char_idx = full_text.find(current_chunk_text[:30], search_pointer)
             if start_char_idx == -1:
                 start_char_idx = search_pointer
