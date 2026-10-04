@@ -57,26 +57,28 @@ class EmbeddingProvider:
 
     def _load_model(self):
         """Load quantized ONNX model via fastembed or fallback to SentenceTransformer."""
-        # 1. Try FastEmbed (ONNX Runtime INT8 Quantized)
+        # 1. Primary Engine: FastEmbed (ONNX Runtime INT8 Quantized ~35-40MB RAM)
+        cache_dir = os.path.join(self.settings.MODELS_CACHE_PATH, "fastembed")
+        os.makedirs(cache_dir, exist_ok=True)
         try:
             from fastembed import TextEmbedding
-            logger.info(f"Loading INT8 Quantized ONNX embedding model '{self.model_name}' via fastembed...")
-            
-            # Map sentence-transformers slug to fastembed model name if needed
-            model_slug = self.model_name
-            if model_slug == "sentence-transformers/all-MiniLM-L6-v2":
-                model_slug = "sentence-transformers/all-MiniLM-L6-v2"
+            logger.info(f"Loading INT8 Quantized ONNX embedding model '{self.model_name}' via fastembed (cache_dir={cache_dir})...")
             
             model = TextEmbedding(
-                model_name=model_slug,
+                model_name=self.model_name,
+                cache_dir=cache_dir,
                 threads=1,
             )
             logger.info("INT8 Quantized ONNX embedding model loaded successfully (~40MB RAM).")
             return model
         except Exception as e:
-            logger.warning(f"FastEmbed ONNX engine unavailable ({e}). Falling back to SentenceTransformer...")
+            logger.error(f"FastEmbed ONNX engine load failed: {e}")
+            if self.settings.ENVIRONMENT.lower() == "production":
+                logger.error("Production environment detected — aborting heavy PyTorch fallback to prevent 512MB RAM OOM crash.")
+                raise RuntimeError(f"FastEmbed ONNX engine failed in production: {e}")
+            logger.warning("Falling back to SentenceTransformer (local development only)...")
 
-        # 2. Fallback: SentenceTransformer (PyTorch CPU)
+        # 2. Fallback Engine: SentenceTransformer (Local development only — PyTorch CPU)
         try:
             from sentence_transformers import SentenceTransformer
             local_path = Path(self.settings.local_embedding_model_path())

@@ -34,21 +34,6 @@ async def lifespan(app: FastAPI):
     logger = get_logger(__name__)
     logger.info("Application starting")
 
-    # Defensively set PyTorch threading limits at the Python level too.
-    # Some torch builds ignore env vars set after DLL load; this covers both.
-    try:
-        import torch
-        torch.set_num_threads(1)
-        if hasattr(torch, "set_num_interop_threads"):
-            torch.set_num_interop_threads(1)
-        logger.info(
-            f"PyTorch {torch.__version__} loaded — "
-            f"CUDA available: {torch.cuda.is_available()} — "
-            f"threads: {torch.get_num_threads()}"
-        )
-    except Exception:
-        pass
-
     # Ensure required storage directories exist
     directories = [
         settings.UPLOADS_PATH,

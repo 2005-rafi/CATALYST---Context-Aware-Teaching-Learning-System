@@ -35,11 +35,8 @@ pymupdf>=1.24.0
 # === NLP / ML — Ultra-Lightweight INT8 Quantized ONNX & CPU ML ===
 fastembed>=0.4.0
 onnxruntime>=1.18.0
-sentence-transformers==3.1.1
-transformers>=4.44.0,<4.48.0
 faiss-cpu>=1.9.0
 numpy>=1.26.4
-scikit-learn>=1.5.1
 tiktoken>=0.7.0
 rapidfuzz>=3.9.0
 
