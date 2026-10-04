@@ -1,6 +1,8 @@
 import functools
-from pydantic_settings import BaseSettings
+from typing import Union
+import json
 from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # API Keys
@@ -45,7 +47,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = Field(default="INFO")
     ENVIRONMENT: str = Field(default="development")
 
-    ALLOWED_ORIGINS: list[str] = Field(
+    ALLOWED_ORIGINS: Union[list[str], str] = Field(
         default=[
             "http://localhost:3000",
             "http://127.0.0.1:3000",
@@ -59,20 +61,24 @@ class Settings(BaseSettings):
     )
     PORT: int = Field(default=8000)
 
-    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @field_validator("ALLOWED_ORIGINS", mode="after")
     @classmethod
     def parse_allowed_origins(cls, v):
         if isinstance(v, str):
-            if v.strip() == "*":
+            v_str = v.strip()
+            if v_str == "*":
                 return ["*"]
-            if v.startswith("[") and v.endswith("]"):
-                import json
+            if v_str.startswith("[") and v_str.endswith("]"):
                 try:
-                    return json.loads(v)
+                    parsed = json.loads(v_str)
+                    if isinstance(parsed, list):
+                        return [str(x).strip() for x in parsed if str(x).strip()]
                 except Exception:
                     pass
-            return [origin.strip() for origin in v.split(",") if origin.strip()]
-        return v
+            return [origin.strip() for origin in v_str.split(",") if origin.strip()]
+        elif isinstance(v, list):
+            return [str(x).strip() for x in v if str(x).strip()]
+        return ["*"]
 
     model_config = {
         "env_file": "secrets/.env",
