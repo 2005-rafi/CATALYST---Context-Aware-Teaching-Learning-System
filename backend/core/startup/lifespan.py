@@ -22,6 +22,8 @@ async def lifespan(app: FastAPI):
     try:
         import torch
         torch.set_num_threads(1)
+        if hasattr(torch, "set_num_interop_threads"):
+            torch.set_num_interop_threads(1)
     except Exception:
         pass
     
@@ -47,9 +49,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Startup memory profile sanitization notice: {e}")
         
-    logger.info("Preloading embedding models...")
+    logger.info("Initializing embedding provider...")
     get_embedding_provider()
-    get_cross_encoder_provider()
+    
+    if settings.ENABLE_CROSS_ENCODER:
+        logger.info("Initializing cross-encoder provider...")
+        get_cross_encoder_provider()
         
     logger.info("All systems initialized")
     

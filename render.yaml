@@ -3,7 +3,7 @@ services:
   - type: web
     name: catalyst-rag-backend
     runtime: python
-    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    buildCommand: "pip install --upgrade pip && pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt"
     startCommand: "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PYTHON_VERSION
@@ -16,10 +16,18 @@ services:
         value: "false"
       - key: ALLOWED_ORIGINS
         value: "*"
+      - key: ENABLE_CROSS_ENCODER
+        value: "false"
+      - key: ENABLE_LOCAL_MODEL
+        value: "false"
+      - key: TORCH_NUM_THREADS
+        value: "1"
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: MKL_NUM_THREADS
+        value: "1"
       - key: EMBEDDING_MODEL
         value: "sentence-transformers/all-MiniLM-L6-v2"
-      - key: CROSS_ENCODER_MODEL
-        value: "cross-encoder/ms-marco-MiniLM-L-6-v2"
       - key: GROQ_API_KEY
         sync: false  # Must be populated in Render Dashboard Environment Settings
       - key: HF_TOKEN
